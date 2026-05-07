@@ -105,8 +105,12 @@ class Libro(Material):
 
         [L001] El Quijote - Miguel de Cervantes · Libro de 863 páginas (disponible)
         """
+        if self.disponible:
+            estado = "disponible"
+        else:
+            estado = "prestado"
 
-        raise NotImplementedError("Completa Libro.descripcion_corta()")
+        return f"[{self.codigo}] {self.titulo}  - {self.autor} · Libro de {self.paginas} páginas ({estado})"
 
 
 class RecursoDigital(Material):
