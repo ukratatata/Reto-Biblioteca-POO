@@ -190,8 +190,11 @@ class Socio(Usuario):
         - Si numero_prestamos_activos es mayor o igual que max_prestamos, devuelve False.
         - En caso contrario, devuelve True.
         """
-
-        raise NotImplementedError("Completa Socio.puede_prestar()")
+        if numero_prestamos_activos >= 3 or self.sancionado == True:
+            return False
+        else:
+            return True
+  
 
     def descripcion_corta(self):
         """
