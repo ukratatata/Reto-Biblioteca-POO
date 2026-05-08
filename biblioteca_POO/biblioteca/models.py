@@ -20,232 +20,450 @@ Solo define objetos y comportamientos propios del problema.
 """
 
 
-class Material:
+from abc import ABC, abstractmethod
+from enum import Enum
+
+# 1. Definición de la Máquina de Estados (Enumerador): en vez de usar strings sueltos, definimos un Enum para los estados posibles de un material.
+class EstadoMaterial(Enum):
+    DISPONIBLE = "Disponible"                       # El material está en la biblioteca y se puede prestar
+    PENDIENTE_RECOGIDA = "Pendiente de Recogida"    # El usuario tiene 2 días para venir a por él
+    PRESTADO = "Prestado"                           # El usuario lo tiene en su casa (15 días...)
+    NO_DISPONIBLE = "No Disponible"                # Extra: Para materiales que no se pueden prestar (mantenimiento, extravio, retiro...)
+
+
+class TipoDispositivo(Enum):
+    ORDENADOR = "Ordenador"
+    TABLET = "Tablet"
+    E_READER = "E-Reader"
+    CALCULADORA = "Calculadora"
+    OTROS = "Otros"
+
+# 2. Clase Abstracta Base (El Contrato)
+class Material(ABC):
     """
-    Clase base para cualquier material de la biblioteca.
-
-    Un Material tiene datos comunes:
-    - codigo
-    - titulo
-    - autor
-    - disponible
+    Clase abstracta pura que define la estructura base de cualquier 
+    elemento prestable en la biblioteca. No se puede instanciar directamente.
     """
+    
+    def __init__(self, codigo_id: str, titulo: str, estado: EstadoMaterial = EstadoMaterial.DISPONIBLE):
+        # Atributos protegidos (Encapsulación básica)
+        self._codigo_id = codigo_id
+        self._titulo = titulo
+        self._estado = estado # Estado inicial por defecto: Disponible
 
-    def __init__(self, codigo, titulo, autor, disponible=True):
+    # -- Getters básicos para acceder a la información de forma segura --
+    @property
+    def codigo_id(self) -> str:
+        return self._codigo_id
+
+    @property
+    def titulo(self) -> str:
+        return self._titulo
+        
+    @property
+    def estado(self) -> EstadoMaterial:
+        return self._estado
+
+    # -- MÉTODOS CONCRETOS (Todos heredan) --
+
+    def bloquear(self) -> bool:
         """
-        Constructor de Material.
-
-        disponible será True si el material se puede prestar.
-        disponible será False si el material ya está prestado.
+        Cambia el estado a NO_DISPONIBLE, impidiendo cualquier préstamo.
+        Útil para mantenimiento o extravío.
         """
-
-        self.codigo = codigo
-        self.titulo = titulo
-        self.autor = autor
-        self.disponible = bool(disponible)
-
-    def prestar(self):
-        """
-        Intenta prestar el material.
-
-        Devuelve True si se ha podido prestar.
-        Devuelve False si ya estaba prestado.
-        """
-
-        if self.disponible:
-            self.disponible = False
+        if self._estado != EstadoMaterial.NO_DISPONIBLE:
+            self._estado = EstadoMaterial.NO_DISPONIBLE
             return True
+        return False
+    
+    # -- MÉTODOS ABSTRACTOS (El Polimorfismo) --
+    
+    @abstractmethod
+    def prestar(self) -> bool:
+        """
+        Intenta prestar el material a un socio.
+        OBLIGATORIO: Cada subclase debe implementar su propia lógica.
+        (Ej. Físico = cambiar estado; Digital = restar licencia)
+        """
+        pass
 
+    @abstractmethod
+    def devolver(self) -> bool:
+        """
+        Procesa la devolución del material.
+        OBLIGATORIO: Cada subclase debe implementar su propia lógica.
+        """
+        pass
+
+    @abstractmethod
+    def descripcion_corta(self) -> str:
+        """
+        Devuelve un string formateado con los datos del material.
+        OBLIGATORIO: Cada subclase debe definir cómo se muestra por consola.
+        """
+        pass
+     
+
+class MaterialFisico(Material):
+    """Clase intermedia para todo lo que ocupa espacio en la biblioteca."""
+    def __init__(self, codigo_id: str, titulo: str, ubicacion: str):
+        super().__init__(codigo_id, titulo)
+        self._ubicacion = ubicacion  # Ej: "Pasillo 4, Estante B"
+
+    @property
+    def ubicacion(self) -> str:
+        return self._ubicacion # Si es None, se asume que el material no tiene ubicación física (ej. en préstamo o mantenimiento)
+    
+    # Implementamos la lógica común de préstamo físico para no repetirla
+    def reservar_recogida(self) -> bool:
+        if self._estado == EstadoMaterial.DISPONIBLE:
+            self._estado = EstadoMaterial.PENDIENTE_RECOGIDA
+            return True
         return False
 
-    def devolver(self):
-        """
-        Marca el material como disponible.
-        """
+    def prestar(self) -> bool:
+        if self._estado == EstadoMaterial.DISPONIBLE:
+            self._estado = EstadoMaterial.PRESTADO
+            return True
+        elif self._estado == EstadoMaterial.PENDIENTE_RECOGIDA:
+            self._estado = EstadoMaterial.PRESTADO
+            return True
+        return False
 
-        self.disponible = True
-
-    def descripcion_corta(self):
-        """
-        Devuelve un texto sencillo para mostrar por pantalla.
-        """
-
-        if self.disponible:
-            estado = "disponible"
-        else:
-            estado = "prestado"
-
-        return f"[{self.codigo}] {self.titulo} - {self.autor} ({estado})"
+    def devolver(self) -> bool:
+        if self._estado == EstadoMaterial.PRESTADO:
+            self._estado = EstadoMaterial.DISPONIBLE
+            return True
+        elif self._estado == EstadoMaterial.PENDIENTE_RECOGIDA:
+            self._estado = EstadoMaterial.DISPONIBLE
+            return True
+        return False
 
 
-class Libro(Material):
-    """
-    Clase que representa un libro.
+# 4. Clases Concretas Nivel 3 (Las que realmente se instancian)
 
-    Hereda de Material porque un libro ES un material.
-    """
+class Libro(MaterialFisico):
+    def __init__(self, codigo_id: str, titulo: str, ubicacion: str, autor: str, paginas: int,  isbn = None):
+        super().__init__(codigo_id, titulo, ubicacion)
+        self._autor = autor
+        self._paginas = paginas
+        self._isbn = isbn
 
-    def __init__(self, codigo, titulo, autor, paginas, disponible=True):
-        """
-        Constructor de Libro.
+    @property
+    def isbn(self):
+        return self._isbn
+    
+    @property
+    def autor(self):
+        return self._autor
+    
+    @property
+    def paginas(self):
+        return self._paginas
 
-        Usa super() para reutilizar el constructor de Material.
-        """
+    def descripcion_corta(self) -> str:
+        autor_str = self._autor if self._autor else "Autor desconocido"
+        paginas_str = f"{self._paginas} páginas" if self._paginas else "Páginas no disponibles"
+        isbn_str = self._isbn if self._isbn else "no disponible"
+        return f"[{self.codigo_id}] Libro: '{self.titulo}' por {autor_str} - ISBN: {isbn_str} - {self.estado.value}"
 
-        super().__init__(codigo, titulo, autor, disponible)
-        self.paginas = int(paginas)
 
-    def descripcion_corta(self):
-        """
-        TODO 1
+class Dispositivo(MaterialFisico):
+    def __init__(self, codigo_id: str, titulo: str, ubicacion: str, fabricante: str, so: str, tipo_dispositivo: TipoDispositivo):
+        super().__init__(codigo_id, titulo, ubicacion)
+        self._tipo_dispositivo = tipo_dispositivo
+        self._fabricante = fabricante
+        self._so = so  # Sistema Operativo
 
-        Completa este método para que devuelva una descripción de un libro.
+    @property
+    def fabricante(self):
+        return self._fabricante
 
-        Ejemplo esperado:
+    @property
+    def so(self):
+        return self._so
 
-        [L001] El Quijote - Miguel de Cervantes · Libro de 863 páginas (disponible)
-        """
-        if self.disponible:
-            estado = "disponible"
-        else:
-            estado = "prestado"
+    @property
+    def tipo_dispositivo(self):
+        return self._tipo_dispositivo.value
 
-        return f"[{self.codigo}] {self.titulo}  - {self.autor} · Libro de {self.paginas} páginas ({estado})"
+    def descripcion_corta(self) -> str:
+        fabricante_str = self._fabricante if self._fabricante else "Fabricante desconocido"
+        so_str = self._so if self._so else "SO no disponible"
+        return f"[{self.codigo_id}] {self._tipo_dispositivo.value}: {self.titulo} - Fabricante: {fabricante_str} - SO: ({so_str}) - {self.estado.value}"
+
+
+class JuegoDeMesa(MaterialFisico):
+    def __init__(self, codigo_id: str, titulo: str, ubicacion: str, 
+                 editorial: str, min_jugadores = None, max_jugadores = None): # Estaria bien tipear a int aunque se pueda none?
+        
+        super().__init__(codigo_id, titulo, ubicacion)
+        self._editorial = editorial
+        self._min_jugadores = min_jugadores
+        self._max_jugadores = max_jugadores
+
+    @property
+    def editorial(self):
+        return self._editorial 
+    
+    @property
+    def min_jugadores(self):
+        return self._min_jugadores 
+    
+    @property
+    def max_jugadores(self):
+        return self._max_jugadores 
+    
+    def descripcion_corta(self) -> str:
+        editorial_str = self._editorial if self._editorial else "Editorial desconocida"
+        min_jugadores_str = f"{self._min_jugadores}" if self._min_jugadores else "Número mínimo de jugadores no disponible"
+        max_jugadores_str = f"{self._max_jugadores} jugadores" if self._max_jugadores else "Número máximo de jugadores no disponible"
+        return f"[{self.codigo_id}] Juego: '{self.titulo}', de {editorial_str} - ({min_jugadores_str}-{max_jugadores_str}) - {self.estado.value}"
 
 
 class RecursoDigital(Material):
-    """
-    Clase que representa un recurso digital.
+    """Hereda directamente de Material, porque no tiene ubicación física."""
+    def __init__(self, codigo_id: str, titulo: str, url: str, licencias_totales: int):
+        super().__init__(codigo_id, titulo)
+        self._url = url
+        self._licencias_totales = licencias_totales
+        self._licencias_disponibles = licencias_totales
 
-    Hereda de Material porque un recurso digital ES un material.
-    """
+    @property
+    def url(self):
+        return self._url   
 
-    def __init__(self, codigo, titulo, autor, url, disponible=True):
-        """
-        Constructor de RecursoDigital.
-        """
+    @property
+    def licencias_totales(self):
+        return self._licencias_totales
 
-        super().__init__(codigo, titulo, autor, disponible)
-        self.url = url
+    @property
+    def licencias_disponibles(self):
+        return self._licencias_disponibles
 
-    def descripcion_corta(self):
-        """
-        Devuelve una descripción de un recurso digital.
-        """
-
-        if self.disponible:
-            estado = "disponible"
-        else:
-            estado = "prestado"
-
-        return f"[{self.codigo}] {self.titulo} - {self.autor} · Recurso digital ({estado})"
-
-
-class Usuario:
-    """
-    Clase base para usuarios del sistema.
-    """
-
-    def __init__(self, identificador, nombre):
-        """
-        Constructor de Usuario.
-        """
-
-        self.identificador = identificador
-        self.nombre = nombre
-
-    def descripcion_corta(self):
-        """
-        Devuelve una descripción sencilla.
-        """
-
-        return f"[{self.identificador}] {self.nombre}"
-
-
-class Socio(Usuario):
-    """
-    Clase que representa un socio de la biblioteca.
-
-    Hereda de Usuario porque un socio ES un usuario.
-    """
-
-    def __init__(self, identificador, nombre, sancionado=False, max_prestamos=3):
-        """
-        Constructor de Socio.
-        """
-
-        super().__init__(identificador, nombre)
-
-        self.sancionado = bool(sancionado)
-        self.max_prestamos = int(max_prestamos)
-
-    def puede_prestar(self, numero_prestamos_activos):
-        """
-        TODO 2
-
-        Completa este método.
-
-        Reglas:
-        - Si el socio está sancionado, devuelve False.
-        - Si numero_prestamos_activos es mayor o igual que max_prestamos, devuelve False.
-        - En caso contrario, devuelve True.
-        """
-        if numero_prestamos_activos >= 3 or self.sancionado == True:
-            return False
-        else:
+    # POLIMORFISMO: El préstamo digital funciona restando licencias
+    def prestar(self) -> bool:
+        if self._licencias_disponibles > 0: # Si hay licencias disponibles, se puede prestar
+            self._licencias_disponibles -= 1
+            if self._licencias_disponibles == 0:
+                self._estado = EstadoMaterial.PRESTADO
             return True
+        return False
+
+    def devolver(self) -> bool:
+        if self._licencias_disponibles < self._licencias_totales:
+            self._licencias_disponibles += 1
+            self._estado = EstadoMaterial.DISPONIBLE
+            return True
+        return False
+
+    def añadir_licencias(self, cantidad: int) -> bool:
+        if cantidad > 0:
+            self._licencias_totales += cantidad
+            self._licencias_disponibles += cantidad
+            self._estado = EstadoMaterial.DISPONIBLE
+            return True
+        return False
+    
+    def retirar_licencias(self, cantidad: int) -> bool:
+        if 0 < cantidad <= self._licencias_disponibles:
+            self._licencias_totales -= cantidad
+            self._licencias_disponibles -= cantidad
+            if self._licencias_totales == 0:
+                self._estado = EstadoMaterial.NO_DISPONIBLE
+            if self._licencias_disponibles == 0:
+                self._estado = EstadoMaterial.PRESTADO
+            return True     # Plantear la posibilidad de retirar licencias aunque no estén disponibles (hacer que el usuario pierda el acceso a ese recurso siendo notificado del motivo)
+        return False
+
+    def descripcion_corta(self) -> str:
+        return f"[{self.codigo_id}] Digital: '{self.titulo}' - Licencias libres: {self._licencias_disponibles}/{self._licencias_totales}"
+
+
+libro1 = Libro("L001", "El Quijote", "Pasillo 4, Estante B", "Miguel de Cervantes", 863, "978-3-16-148410-0")
+dispositivo1 = Dispositivo("D001", "iPad Pro", "Mostrador Principal", "Apple", "iOS", TipoDispositivo.TABLET)
+dispositivo2 = Dispositivo("D002", "Lenovo ThinkPad", "Pasillo 1, Estante C", "Lenovo", None, TipoDispositivo.ORDENADOR)
+juego1 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", 3, 4)
+recurso1 = RecursoDigital("R001", "Guía de Python", "https://python.org", 5)
+
+
+print(libro1.descripcion_corta())
+print(dispositivo1.descripcion_corta()) 
+print(dispositivo2.descripcion_corta())
+print(juego1.descripcion_corta())
+print(recurso1.descripcion_corta())
+
+
+
+
+# class Libro(Material):
+#     """
+#     Clase que representa un libro.
+
+#     Hereda de Material porque un libro ES un material.
+#     """
+
+#     def __init__(self, codigo, titulo, autor, paginas, disponible=True):
+#         """
+#         Constructor de Libro.
+
+#         Usa super() para reutilizar el constructor de Material.
+#         """
+
+#         super().__init__(codigo, titulo, )
+#         self.paginas = int(paginas)
+
+#     def descripcion_corta(self):
+#         """
+#         TODO 1
+
+#         Completa este método para que devuelva una descripción de un libro.
+
+#         Ejemplo esperado:
+
+#         [L001] El Quijote - Miguel de Cervantes · Libro de 863 páginas (disponible)
+#         """
+#         if self.disponible:
+#             estado = "disponible"
+#         else:
+#             estado = "prestado"
+
+#         return f"[{self.codigo}] {self.titulo}  - {self.autor} · Libro de {self.paginas} páginas ({estado})"
+
+
+# class RecursoDigital(Material):
+#     """
+#     Clase que representa un recurso digital.
+
+#     Hereda de Material porque un recurso digital ES un material.
+#     """
+
+#     def __init__(self, codigo, titulo, autor, url, disponible=True):
+#         """
+#         Constructor de RecursoDigital.
+#         """
+
+#         super().__init__(codigo, titulo, autor, disponible)
+#         self.url = url
+
+#     def descripcion_corta(self):
+#         """
+#         Devuelve una descripción de un recurso digital.
+#         """
+
+#         if self.disponible:
+#             estado = "disponible"
+#         else:
+#             estado = "prestado"
+
+#         return f"[{self.codigo}] {self.titulo} - {self.autor} · Recurso digital ({estado})"
+
+
+# class Usuario:
+#     """
+#     Clase base para usuarios del sistema.
+#     """
+
+#     def __init__(self, identificador, nombre):
+#         """
+#         Constructor de Usuario.
+#         """
+
+#         self.identificador = identificador
+#         self.nombre = nombre
+
+#     def descripcion_corta(self):
+#         """
+#         Devuelve una descripción sencilla.
+#         """
+
+#         return f"[{self.identificador}] {self.nombre}"
+
+
+# class Socio(Usuario):
+#     """
+#     Clase que representa un socio de la biblioteca.
+
+#     Hereda de Usuario porque un socio ES un usuario.
+#     """
+
+#     def __init__(self, identificador, nombre, sancionado=False, max_prestamos=3):
+#         """
+#         Constructor de Socio.
+#         """
+
+#         super().__init__(identificador, nombre)
+
+#         self.sancionado = bool(sancionado)
+#         self.max_prestamos = int(max_prestamos)
+
+#     def puede_prestar(self, numero_prestamos_activos):
+#         """
+#         TODO 2
+
+#         Completa este método.
+
+#         Reglas:
+#         - Si el socio está sancionado, devuelve False.
+#         - Si numero_prestamos_activos es mayor o igual que max_prestamos, devuelve False.
+#         - En caso contrario, devuelve True.
+#         """
+#         if numero_prestamos_activos >= 3 or self.sancionado == True:
+#             return False
+#         else:
+#             return True
   
 
-    def descripcion_corta(self):
-        """
-        Devuelve una descripción del socio.
-        """
+#     def descripcion_corta(self):
+#         """
+#         Devuelve una descripción del socio.
+#         """
 
-        if self.sancionado:
-            estado = "sancionado"
-        else:
-            estado = "activo"
+#         if self.sancionado:
+#             estado = "sancionado"
+#         else:
+#             estado = "activo"
 
-        return f"[{self.identificador}] {self.nombre} · Socio {estado}"
+#         return f"[{self.identificador}] {self.nombre} · Socio {estado}"
 
 
-class Prestamo:
-    """
-    Clase que representa un préstamo.
+# class Prestamo:
+#     """
+#     Clase que representa un préstamo.
 
-    Esta clase muestra una asociación:
-    - tiene un socio;
-    - tiene un material.
+#     Esta clase muestra una asociación:
+#     - tiene un socio;
+#     - tiene un material.
 
-    No hereda de Socio ni de Material.
-    """
+#     No hereda de Socio ni de Material.
+#     """
 
-    def __init__(self, id_prestamo, socio, material, fecha_prestamo, fecha_devolucion=None):
-        """
-        Constructor de Prestamo.
-        """
+#     def __init__(self, id_prestamo, socio, material, fecha_prestamo, fecha_devolucion=None):
+#         """
+#         Constructor de Prestamo.
+#         """
 
-        self.id_prestamo = id_prestamo
-        self.socio = socio
-        self.material = material
-        self.fecha_prestamo = fecha_prestamo
-        self.fecha_devolucion = fecha_devolucion
+#         self.id_prestamo = id_prestamo
+#         self.socio = socio
+#         self.material = material
+#         self.fecha_prestamo = fecha_prestamo
+#         self.fecha_devolucion = fecha_devolucion
 
-    def esta_activo(self):
-        """
-        Devuelve True si el préstamo sigue activo.
-        """
+#     def esta_activo(self):
+#         """
+#         Devuelve True si el préstamo sigue activo.
+#         """
 
-        return self.fecha_devolucion is None
+#         return self.fecha_devolucion is None
 
-    def resumen(self):
-        """
-        Devuelve una frase resumen.
-        """
+#     def resumen(self):
+#         """
+#         Devuelve una frase resumen.
+#         """
 
-        if self.esta_activo():
-            estado = "activo"
-        else:
-            estado = f"devuelto el {self.fecha_devolucion}"
+#         if self.esta_activo():
+#             estado = "activo"
+#         else:
+#             estado = f"devuelto el {self.fecha_devolucion}"
 
-        return f"Préstamo {self.id_prestamo}: {self.socio.nombre} tiene '{self.material.titulo}' ({estado})"
+#         return f"Préstamo {self.id_prestamo}: {self.socio.nombre} tiene '{self.material.titulo}' ({estado})"
