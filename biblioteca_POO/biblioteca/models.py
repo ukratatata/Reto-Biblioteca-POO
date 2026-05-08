@@ -211,7 +211,7 @@ class Dispositivo(MaterialFisico):  # Para ordenadores, tablets, e-readers, calc
         fabricante_str = self._fabricante if self._fabricante else "desconocido"
         so_str = self._so if self._so else "desconocido"
         return (
-            f"[{self.codigo_id}] {self.tipo_dispositivo.value}: {self.titulo} ",
+            f"[{self.codigo_id}] {self.tipo_dispositivo.value}: {self.titulo} "
             f"- Fabricante: {fabricante_str} - SO: ({so_str}) - Estado: {self.estado.value}"
         )
 
@@ -320,99 +320,99 @@ class RecursoDigital(Material):
         )
 
 
-class Usuario:
+# class Usuario:
 
-    def __init__(self, id, nombre, apellido):
-        self.id = id
-        self.nombre = nombre
-        self.apellido = apellido
+#     def __init__(self, id, nombre, apellido):
+#         self.id = id
+#         self.nombre = nombre
+#         self.apellido = apellido
 
-    def datos_usuario(self):
-        return f"[{self.id}] {self.nombre} {self.apellido}"
+#     def datos_usuario(self):
+#         return f"[{self.id}] {self.nombre} {self.apellido}"
     
-class Socio(Usuario):
+# class Socio(Usuario):
 
-    def __init__(self, id, nombre, apellido, sancionado=False, max_prestamos=3):
+#     def __init__(self, id, nombre, apellido, sancionado=False, max_prestamos=3):
 
-        super().__init__(id, nombre, apellido)
+#         super().__init__(id, nombre, apellido)
 
-        self.sancionado = bool(sancionado)
-        self.max_prestamos = int(max_prestamos)
+#         self.sancionado = bool(sancionado)
+#         self.max_prestamos = int(max_prestamos)
 
-    def puede_prestar(self, numero_prestamos_activos):
+#     def puede_prestar(self, numero_prestamos_activos):
 
-        if self.sancionado:
-            estado = "sancionado"
-        else:
-            estado = "activo" 
+#         if self.sancionado:
+#             estado = "sancionado"
+#         else:
+#             estado = "activo" 
 
-        if self.sancionado:
-            return False
-        if numero_prestamos_activos >= self.max_prestamos:
-            return False
+#         if self.sancionado:
+#             return False
+#         if numero_prestamos_activos >= self.max_prestamos:
+#             return False
             
-        return True
+#         return True
         
-        return f"[{self.id} {self.nombre} {self.apellido} - Socio {(estado)}]"
+#         return f"[{self.id} {self.nombre} {self.apellido} - Socio {(estado)}]"
         
-    def descripcion_corta(self):
+#     def descripcion_corta(self):
 
-        if self.sancionado:
-            estado = "sancionado"
-        else:
-            estado = "activo"
+#         if self.sancionado:
+#             estado = "sancionado"
+#         else:
+#             estado = "activo"
 
-        return f"[{self.id}] {self.nombre} {self.apellido} · Socio {estado}"
+#         return f"[{self.id}] {self.nombre} {self.apellido} · Socio {estado}"
 
 
-class Bibliotecario(Usuario):
+# class Bibliotecario(Usuario):
 
-    def __init__(self, id, nombre, apellido, sancionado=False, max_prestamos=3):
+#     def __init__(self, id, nombre, apellido, sancionado=False, max_prestamos=3):
 
-        super().__init__(id, nombre, apellido)
+#         super().__init__(id, nombre, apellido)
 
-        self.sancionado = bool(sancionado)
-        self.max_prestamos = int(max_prestamos)
+#         self.sancionado = bool(sancionado)
+#         self.max_prestamos = int(max_prestamos)
 
-    def puede_prestar(self, numero_prestamos_activos):
+#     def puede_prestar(self, numero_prestamos_activos):
 
-        if self.sancionado:
-            estado = "sancionado"
-        else:
-            estado = "activo" 
+#         if self.sancionado:
+#             estado = "sancionado"
+#         else:
+#             estado = "activo" 
 
-        if self.sancionado:
-            return False
-        if numero_prestamos_activos >= self.max_prestamos:
-            return False
+#         if self.sancionado:
+#             return False
+#         if numero_prestamos_activos >= self.max_prestamos:
+#             return False
             
-        return True
+#         return True
         
-        return f"[{self.id} {self.nombre} {self.apellido} - Socio {(estado)}]"
+#         return f"[{self.id} {self.nombre} {self.apellido} - Socio {(estado)}]"
         
-    def descripcion_corta(self):
+#     def descripcion_corta(self):
 
-        if self.sancionado:
-            estado = "sancionado"
-        else:
-            estado = "activo"
+#         if self.sancionado:
+#             estado = "sancionado"
+#         else:
+#             estado = "activo"
 
-        return f"[{self.id}] {self.nombre} {self.apellido} · Socio {estado}"
+#         return f"[{self.id}] {self.nombre} {self.apellido} · Socio {estado}"
     
-    def añadir_libro(self, biblioteca, libro):
+#     def añadir_libro(self, biblioteca, libro):
 
-        biblioteca.catalogo.append(libro)
+#         biblioteca.catalogo.append(libro)
 
-        return f"Libro '{libro.titulo}' añadido."
+#         return f"Libro '{libro.titulo}' añadido."
     
-    def quitar_libro(self, biblioteca, codigo):
+#     def quitar_libro(self, biblioteca, codigo):
 
-        for libro in biblioteca.catalogo:
-            if libro.codigo == codigo:
-                biblioteca.catalogo.remove(libro)
-                return f"Libro {codigo} eliminado."
+#         for libro in biblioteca.catalogo:
+#             if libro.codigo == codigo:
+#                 biblioteca.catalogo.remove(libro)
+#                 return f"Libro {codigo} eliminado."
             
-        return "Libro no encontrado."
+#         return "Libro no encontrado."
 
 
 
