@@ -106,13 +106,13 @@ class Material(ABC):
 
 class MaterialFisico(Material):
     """Clase intermedia para todo lo que ocupa espacio en la biblioteca."""
-    def __init__(self, codigo_id: str, titulo: str, ubicacion: str):
+    def __init__(self, codigo_id: str, titulo: str, ubicacion: str = None):
         super().__init__(codigo_id, titulo)
         self._ubicacion = ubicacion  # Ej: "Pasillo 4, Estante B"
 
-    @property
-    def ubicacion(self) -> str:
-        return self._ubicacion # Si es None, se asume que el material no tiene ubicación física (ej. en préstamo o mantenimiento)
+    @property   # Por ver como hacer para cuando este pendiente de recogida, para que el bibliotecario 
+    def ubicacion(self) -> str: # pueda ver ubicacion pero no el usuario que veria "recoger en mostrador".     
+        return self._ubicacion
     
     # Implementamos la lógica común de préstamo físico para no repetirla
     def reservar_recogida(self) -> bool:
@@ -143,7 +143,13 @@ class MaterialFisico(Material):
 # 4. Clases Concretas Nivel 3 (Las que realmente se instancian)
 
 class Libro(MaterialFisico):
-    def __init__(self, codigo_id: str, titulo: str, ubicacion: str, autor: str, paginas: int,  isbn = None):
+    def __init__(self, 
+                 codigo_id: str, 
+                 titulo: str, 
+                 ubicacion: str, 
+                 autor: str = None, 
+                 paginas: int = None,  
+                 isbn = None):
         super().__init__(codigo_id, titulo, ubicacion)
         self._autor = autor
         self._paginas = paginas
@@ -162,18 +168,28 @@ class Libro(MaterialFisico):
         return self._paginas
 
     def descripcion_corta(self) -> str:
-        autor_str = self._autor if self._autor else "Autor desconocido"
-        paginas_str = f"{self._paginas} páginas" if self._paginas else "Páginas no disponibles"
+        autor_str = self._autor if self._autor else "desconocido"
+        paginas_str = f"{self._paginas}" if self._paginas else "desconocido"
         isbn_str = self._isbn if self._isbn else "no disponible"
-        return f"[{self.codigo_id}] Libro: '{self.titulo}' por {autor_str} - ISBN: {isbn_str} - {self.estado.value}"
+        return (
+            f"[{self.codigo_id}] Libro: '{self.titulo}' - Autor: {autor_str} - Pags: {paginas_str}"
+            f"- ISBN: {isbn_str} - Estado: {self.estado.value}"
+        )
 
-
-class Dispositivo(MaterialFisico):
-    def __init__(self, codigo_id: str, titulo: str, ubicacion: str, fabricante: str, so: str, tipo_dispositivo: TipoDispositivo):
+class Dispositivo(MaterialFisico):  # Para ordenadores, tablets, e-readers, calculadoras y demás dispositivos tecnológicos
+    def __init__(self, 
+                 codigo_id: str, 
+                 titulo: str, 
+                 ubicacion: str, 
+                 tipo_dispositivo: TipoDispositivo, 
+                 fabricante: str = None, 
+                 so: str = None, 
+                 numero_serie: str = None):
         super().__init__(codigo_id, titulo, ubicacion)
         self._tipo_dispositivo = tipo_dispositivo
         self._fabricante = fabricante
         self._so = so  # Sistema Operativo
+        self._numero_serie = numero_serie
 
     @property
     def fabricante(self):
@@ -185,17 +201,28 @@ class Dispositivo(MaterialFisico):
 
     @property
     def tipo_dispositivo(self):
-        return self._tipo_dispositivo.value
+        return self._tipo_dispositivo
+    
+    @property
+    def numero_serie(self):
+        return self._numero_serie
 
     def descripcion_corta(self) -> str:
-        fabricante_str = self._fabricante if self._fabricante else "Fabricante desconocido"
-        so_str = self._so if self._so else "SO no disponible"
-        return f"[{self.codigo_id}] {self._tipo_dispositivo.value}: {self.titulo} - Fabricante: {fabricante_str} - SO: ({so_str}) - {self.estado.value}"
+        fabricante_str = self._fabricante if self._fabricante else "desconocido"
+        so_str = self._so if self._so else "desconocido"
+        return (
+            f"[{self.codigo_id}] {self.tipo_dispositivo.value}: {self.titulo} ",
+            f"- Fabricante: {fabricante_str} - SO: ({so_str}) - Estado: {self.estado.value}"
+        )
 
 
-class JuegoDeMesa(MaterialFisico):
-    def __init__(self, codigo_id: str, titulo: str, ubicacion: str, 
-                 editorial: str, min_jugadores = None, max_jugadores = None): # Estaria bien tipear a int aunque se pueda none?
+class JuegoDeMesa(MaterialFisico):  # Para juegos de mesa, rol, cartas, etc. que se prestan físicamente pero no son libros ni dispositivos tecnológicos
+    def __init__(self, codigo_id: str, 
+                 titulo: str, 
+                 ubicacion: str, 
+                 editorial: str = None, 
+                 min_jugadores: int = None, 
+                 max_jugadores: int = None): # Estaria bien tipear a int aunque se pueda none?
         
         super().__init__(codigo_id, titulo, ubicacion)
         self._editorial = editorial
@@ -216,14 +243,24 @@ class JuegoDeMesa(MaterialFisico):
     
     def descripcion_corta(self) -> str:
         editorial_str = self._editorial if self._editorial else "Editorial desconocida"
-        min_jugadores_str = f"{self._min_jugadores}" if self._min_jugadores else "Número mínimo de jugadores no disponible"
-        max_jugadores_str = f"{self._max_jugadores} jugadores" if self._max_jugadores else "Número máximo de jugadores no disponible"
-        return f"[{self.codigo_id}] Juego: '{self.titulo}', de {editorial_str} - ({min_jugadores_str}-{max_jugadores_str}) - {self.estado.value}"
+        jugadores_str = (
+            f"{self._min_jugadores}-{self._max_jugadores}" 
+            if self._min_jugadores and self._max_jugadores 
+            else "deconocido"
+        )
+        return (
+            f"[{self.codigo_id}] Juego: '{self.titulo}', de {editorial_str} "
+            f"- Jugadores: {jugadores_str}) - Estado: {self.estado.value}"
+        )
 
 
 class RecursoDigital(Material):
     """Hereda directamente de Material, porque no tiene ubicación física."""
-    def __init__(self, codigo_id: str, titulo: str, url: str, licencias_totales: int):
+    def __init__(self,
+                 codigo_id: str,
+                 titulo: str,
+                 url: str,
+                 licencias_totales: int):
         super().__init__(codigo_id, titulo)
         self._url = url
         self._licencias_totales = licencias_totales
@@ -277,21 +314,50 @@ class RecursoDigital(Material):
         return False
 
     def descripcion_corta(self) -> str:
-        return f"[{self.codigo_id}] Digital: '{self.titulo}' - Licencias libres: {self._licencias_disponibles}/{self._licencias_totales}"
+        return (f"[{self.codigo_id}] Digital: '{self.titulo}' - "
+                f"Licencias libres: {self._licencias_disponibles}/{self._licencias_totales}")
 
 
 libro1 = Libro("L001", "El Quijote", "Pasillo 4, Estante B", "Miguel de Cervantes", 863, "978-3-16-148410-0")
-dispositivo1 = Dispositivo("D001", "iPad Pro", "Mostrador Principal", "Apple", "iOS", TipoDispositivo.TABLET)
-dispositivo2 = Dispositivo("D002", "Lenovo ThinkPad", "Pasillo 1, Estante C", "Lenovo", None, TipoDispositivo.ORDENADOR)
+dispositivo1 = Dispositivo("D001", "iPad Pro", "Mostrador Principal", TipoDispositivo.TABLET, fabricante="Apple", so="iOS")
 juego1 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", 3, 4)
+juego2 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", 4)
+juego3 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", max_jugadores = 3)
 recurso1 = RecursoDigital("R001", "Guía de Python", "https://python.org", 5)
 
 
 print(libro1.descripcion_corta())
 print(dispositivo1.descripcion_corta()) 
-print(dispositivo2.descripcion_corta())
 print(juego1.descripcion_corta())
+print(juego2.descripcion_corta())
+print(juego3.descripcion_corta())
 print(recurso1.descripcion_corta())
+
+print(dispositivo1.estado)
+print(dispositivo1.tipo_dispositivo)
+
+
+
+
+
+
+
+""""
+    Mirar de aqui para cuando se muestre por pantalla.
+
+    @property   # Por ver como hacer para cuando este pendiente de recogida, para que el bibliotecario 
+    def ubicacion(self) -> str: # pueda ver ubicacion pero no el usuario que veria "recoger en mostrador".     
+        if self._estado == EstadoMaterial.NO_DISPONIBLE:
+            return "Ubicación no disponible"
+        if self._estado == EstadoMaterial.PRESTADO:
+            return "En préstamo"
+        return self._ubicacion if self._ubicacion else "Ubicación no disponible"
+
+
+
+
+
+"""
 
 
 
