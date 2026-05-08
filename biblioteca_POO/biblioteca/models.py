@@ -314,27 +314,132 @@ class RecursoDigital(Material):
         return False
 
     def descripcion_corta(self) -> str:
-        return (f"[{self.codigo_id}] Digital: '{self.titulo}' - "
-                f"Licencias libres: {self._licencias_disponibles}/{self._licencias_totales}")
+        return (
+            f"[{self.codigo_id}] Digital: '{self.titulo}' - "
+                f"Licencias libres: {self._licencias_disponibles}/{self._licencias_totales}"
+        )
 
 
-libro1 = Libro("L001", "El Quijote", "Pasillo 4, Estante B", "Miguel de Cervantes", 863, "978-3-16-148410-0")
-dispositivo1 = Dispositivo("D001", "iPad Pro", "Mostrador Principal", TipoDispositivo.TABLET, fabricante="Apple", so="iOS")
-juego1 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", 3, 4)
-juego2 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", 4)
-juego3 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", max_jugadores = 3)
-recurso1 = RecursoDigital("R001", "Guía de Python", "https://python.org", 5)
+class Usuario:
+
+    def __init__(self, id, nombre, apellido):
+        self.id = id
+        self.nombre = nombre
+        self.apellido = apellido
+
+    def datos_usuario(self):
+        return f"[{self.id}] {self.nombre} {self.apellido}"
+    
+class Socio(Usuario):
+
+    def __init__(self, id, nombre, apellido, sancionado=False, max_prestamos=3):
+
+        super().__init__(id, nombre, apellido)
+
+        self.sancionado = bool(sancionado)
+        self.max_prestamos = int(max_prestamos)
+
+    def puede_prestar(self, numero_prestamos_activos):
+
+        if self.sancionado:
+            estado = "sancionado"
+        else:
+            estado = "activo" 
+
+        if self.sancionado:
+            return False
+        if numero_prestamos_activos >= self.max_prestamos:
+            return False
+            
+        return True
+        
+        return f"[{self.id} {self.nombre} {self.apellido} - Socio {(estado)}]"
+        
+    def descripcion_corta(self):
+
+        if self.sancionado:
+            estado = "sancionado"
+        else:
+            estado = "activo"
+
+        return f"[{self.id}] {self.nombre} {self.apellido} · Socio {estado}"
 
 
-print(libro1.descripcion_corta())
-print(dispositivo1.descripcion_corta()) 
-print(juego1.descripcion_corta())
-print(juego2.descripcion_corta())
-print(juego3.descripcion_corta())
-print(recurso1.descripcion_corta())
+class Bibliotecario(Usuario):
 
-print(dispositivo1.estado)
-print(dispositivo1.tipo_dispositivo)
+    def __init__(self, id, nombre, apellido, sancionado=False, max_prestamos=3):
+
+        super().__init__(id, nombre, apellido)
+
+        self.sancionado = bool(sancionado)
+        self.max_prestamos = int(max_prestamos)
+
+    def puede_prestar(self, numero_prestamos_activos):
+
+        if self.sancionado:
+            estado = "sancionado"
+        else:
+            estado = "activo" 
+
+        if self.sancionado:
+            return False
+        if numero_prestamos_activos >= self.max_prestamos:
+            return False
+            
+        return True
+        
+        return f"[{self.id} {self.nombre} {self.apellido} - Socio {(estado)}]"
+        
+    def descripcion_corta(self):
+
+        if self.sancionado:
+            estado = "sancionado"
+        else:
+            estado = "activo"
+
+        return f"[{self.id}] {self.nombre} {self.apellido} · Socio {estado}"
+    
+    def añadir_libro(self, biblioteca, libro):
+
+        biblioteca.catalogo.append(libro)
+
+        return f"Libro '{libro.titulo}' añadido."
+    
+    def quitar_libro(self, biblioteca, codigo):
+
+        for libro in biblioteca.catalogo:
+            if libro.codigo == codigo:
+                biblioteca.catalogo.remove(libro)
+                return f"Libro {codigo} eliminado."
+            
+        return "Libro no encontrado."
+
+
+
+
+
+
+
+
+
+
+# libro1 = Libro("L001", "El Quijote", "Pasillo 4, Estante B", "Miguel de Cervantes", 863, "978-3-16-148410-0")
+# dispositivo1 = Dispositivo("D001", "iPad Pro", "Mostrador Principal", TipoDispositivo.TABLET, fabricante="Apple", so="iOS")
+# juego1 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", 3, 4)
+# juego2 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", 4)
+# juego3 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", max_jugadores = 3)
+# recurso1 = RecursoDigital("R001", "Guía de Python", "https://python.org", 5)
+
+
+# print(libro1.descripcion_corta())
+# print(dispositivo1.descripcion_corta()) 
+# print(juego1.descripcion_corta())
+# print(juego2.descripcion_corta())
+# print(juego3.descripcion_corta())
+# print(recurso1.descripcion_corta())
+
+# print(dispositivo1.estado)
+# print(dispositivo1.tipo_dispositivo)
 
 
 
