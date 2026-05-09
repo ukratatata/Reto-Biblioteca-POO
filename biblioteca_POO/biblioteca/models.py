@@ -23,6 +23,9 @@ Solo define objetos y comportamientos propios del problema.
 from abc import ABC, abstractmethod
 from enum import Enum
 
+class ConfiguracionBiblioteca:
+    MAX_PRESTAMOS = 3
+
 # 1. Definición de la Máquina de Estados (Enumerador): en vez de usar strings sueltos, definimos un Enum para los estados posibles de un material.
 class EstadoMaterial(Enum):
     DISPONIBLE = "Disponible"                       # El material está en la biblioteca y se puede prestar
@@ -320,99 +323,163 @@ class RecursoDigital(Material):
         )
 
 
-# class Usuario:
+class Usuario(ABC):
 
-#     def __init__(self, id, nombre, apellido):
-#         self.id = id
-#         self.nombre = nombre
-#         self.apellido = apellido
+    def __init__(self, id_usuario: str, nombre: str, apellido: str, email: str):
+        self._id_usuario = id_usuario
+        self._nombre = nombre
+        self._apellido = apellido
+        self._email = email
 
-#     def datos_usuario(self):
-#         return f"[{self.id}] {self.nombre} {self.apellido}"
+    @property
+    def id_usuario(self): 
+        return self._id_usuario
     
-# class Socio(Usuario):
-
-#     def __init__(self, id, nombre, apellido, sancionado=False, max_prestamos=3):
-
-#         super().__init__(id, nombre, apellido)
-
-#         self.sancionado = bool(sancionado)
-#         self.max_prestamos = int(max_prestamos)
-
-#     def puede_prestar(self, numero_prestamos_activos):
-
-#         if self.sancionado:
-#             estado = "sancionado"
-#         else:
-#             estado = "activo" 
-
-#         if self.sancionado:
-#             return False
-#         if numero_prestamos_activos >= self.max_prestamos:
-#             return False
-            
-#         return True
-        
-#         return f"[{self.id} {self.nombre} {self.apellido} - Socio {(estado)}]"
-        
-#     def descripcion_corta(self):
-
-#         if self.sancionado:
-#             estado = "sancionado"
-#         else:
-#             estado = "activo"
-
-#         return f"[{self.id}] {self.nombre} {self.apellido} · Socio {estado}"
-
-
-# class Bibliotecario(Usuario):
-
-#     def __init__(self, id, nombre, apellido, sancionado=False, max_prestamos=3):
-
-#         super().__init__(id, nombre, apellido)
-
-#         self.sancionado = bool(sancionado)
-#         self.max_prestamos = int(max_prestamos)
-
-#     def puede_prestar(self, numero_prestamos_activos):
-
-#         if self.sancionado:
-#             estado = "sancionado"
-#         else:
-#             estado = "activo" 
-
-#         if self.sancionado:
-#             return False
-#         if numero_prestamos_activos >= self.max_prestamos:
-#             return False
-            
-#         return True
-        
-#         return f"[{self.id} {self.nombre} {self.apellido} - Socio {(estado)}]"
-        
-#     def descripcion_corta(self):
-
-#         if self.sancionado:
-#             estado = "sancionado"
-#         else:
-#             estado = "activo"
-
-#         return f"[{self.id}] {self.nombre} {self.apellido} · Socio {estado}"
+    @property
+    def nombre(self): 
+        return self._nombre
     
-#     def añadir_libro(self, biblioteca, libro):
+    @property
+    def apellido(self): 
+        return self._apellido
 
-#         biblioteca.catalogo.append(libro)
+    @property
+    def email(self): 
+        return self._email
 
-#         return f"Libro '{libro.titulo}' añadido."
+    @abstractmethod
+    def descripcion_corta(self) -> str: 
+        pass
     
-#     def quitar_libro(self, biblioteca, codigo):
+class Socio(Usuario):
 
-#         for libro in biblioteca.catalogo:
-#             if libro.codigo == codigo:
-#                 biblioteca.catalogo.remove(libro)
-#                 return f"Libro {codigo} eliminado."
+    def __init__(self, 
+                 id_usuario,
+                 nombre,
+                 apellido,
+                 email,
+                 sancionado=False,
+                 prestamos_activos= 0,
+                 max_prestamos=ConfiguracionBiblioteca.MAX_PRESTAMOS,
+                 max_especial = False):
+
+        super().__init__(id_usuario, nombre, apellido, email)
+
+        self._sancionado = sancionado # determina si el socio puede prestar
+        self._prestamos_activos = prestamos_activos # cuantos prestamos tiene el usuario
+        self._max_prestamos = max_prestamos # maximo de prestamos, por defecto equivale al maximo global
+        self._max_especial = max_especial # permite que el socio tenga un max diferente, por ejemplo socios con suscripcion
+
+    @property
+    def sancionado(self): 
+        return self._sancionado
+    
+    @property
+    def prestamos_activos(self):
+        return self._prestamos_activos
+
+    @property
+    def max_prestamos(self):
+        if self._max_especial:
+            return self._max_prestamos
+        else:
+            return ConfiguracionBiblioteca.MAX_PRESTAMOS
+    
+    @max_prestamos.setter
+    def max_prestamos(self, nuevo_max):
+        if not self.max_especial:
+            raise ValueError("Este usuario no puede tener un máximo distinto al global")
             
-#         return "Libro no encontrado."
+        if type(nuevo_max) != int:
+            raise ValueError("Estableza el número máximo de préstamos permitidos para este usuario." \
+            " No puede estar vacio.")
+        else:
+            self._max_prestamos = nuevo_max
+    
+    @property
+    def max_especial(self):
+        return self._max_especial
+        
+    @property
+    def puede_prestar(self) -> bool:
+
+        if self._sancionado or (self._prestamos_activos >= self.max_prestamos):
+            return False
+        return True
+    
+    def permitir_cambio_max(self): # Permite que el bibliotecario le asigne un max diferente
+        if self.max_especial:
+            self._max_especial = False
+            self._max_prestamos = ConfiguracionBiblioteca.MAX_PRESTAMOS 
+        else:
+            self._max_especial = True
+
+    def sancionar(self):
+        self._sancionado = False if self._sancionado else True
+
+    def descripcion_corta(self):
+
+        if self.sancionado:
+            estado = "sancionado"
+        else:
+            estado = "activo"
+        if self.max_especial:
+            estado += " Max especial"
+        else:
+            estado += " Max no especial"
+
+        return (f"[{self.id_usuario}] {self.nombre} {self.apellido} - "
+            f"Max prestamos: {self.max_prestamos} - Socio {estado}")
+
+
+class Bibliotecario(Usuario):
+
+    def __init__(self, id_usuario, nombre, apellido, sancionado=False, max_prestamos=3):
+
+        super().__init__(id_usuario, nombre, apellido)
+
+        self.sancionado = bool(sancionado)
+        self.max_prestamos = int(max_prestamos)
+
+    def puede_prestar(self, numero_prestamos_activos):
+
+        if self.sancionado:
+            estado = "sancionado"
+        else:
+            estado = "activo" 
+
+        if self.sancionado:
+            return False
+        if numero_prestamos_activos >= self.max_prestamos:
+            return False
+            
+        return True
+        
+        return f"[{self.id_usuario} {self.nombre} {self.apellido} - Socio {(estado)}]"
+        
+    def descripcion_corta(self):
+
+        if self.sancionado:
+            estado = "sancionado"
+        else:
+            estado = "activo"
+
+        return f"[{self.id_usuario}] {self.nombre} {self.apellido} · Socio {estado}"
+    
+    def añadir_libro(self, biblioteca, libro):
+
+        biblioteca.catalogo.append(libro)
+
+        return f"Libro '{libro.titulo}' añadido."
+    
+    def quitar_libro(self, biblioteca, codigo):
+
+        for libro in biblioteca.catalogo:
+            if libro.codigo == codigo:
+                biblioteca.catalogo.remove(libro)
+                return f"Libro {codigo} eliminado."
+            
+        return "Libro no encontrado."
 
 
 
@@ -423,27 +490,40 @@ class RecursoDigital(Material):
 
 
 
-# libro1 = Libro("L001", "El Quijote", "Pasillo 4, Estante B", "Miguel de Cervantes", 863, "978-3-16-148410-0")
-# dispositivo1 = Dispositivo("D001", "iPad Pro", "Mostrador Principal", TipoDispositivo.TABLET, fabricante="Apple", so="iOS")
-# juego1 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", 3, 4)
-# juego2 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", 4)
-# juego3 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", max_jugadores = 3)
-# recurso1 = RecursoDigital("R001", "Guía de Python", "https://python.org", 5)
+libro1 = Libro("L001", "El Quijote", "Pasillo 4, Estante B", "Miguel de Cervantes", 863, "978-3-16-148410-0")
+dispositivo1 = Dispositivo("D001", "iPad Pro", "Mostrador Principal", TipoDispositivo.TABLET, fabricante="Apple", so="iOS")
+juego1 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", 3, 4)
+juego2 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", 4)
+juego3 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", max_jugadores = 3)
+recurso1 = RecursoDigital("R001", "Guía de Python", "https://python.org", 5)
 
 
-# print(libro1.descripcion_corta())
-# print(dispositivo1.descripcion_corta()) 
-# print(juego1.descripcion_corta())
-# print(juego2.descripcion_corta())
-# print(juego3.descripcion_corta())
-# print(recurso1.descripcion_corta())
+print(libro1.descripcion_corta())
+print(dispositivo1.descripcion_corta()) 
+print(juego1.descripcion_corta())
+print(juego2.descripcion_corta())
+print(juego3.descripcion_corta())
+print(recurso1.descripcion_corta())
 
-# print(dispositivo1.estado)
-# print(dispositivo1.tipo_dispositivo)
-
-
+print(dispositivo1.estado)
+print(dispositivo1.tipo_dispositivo)
 
 
+socio1 = Socio("S0001", "Paola", "Santana", "Paola.Santana@gmail.com" )
+print(socio1.descripcion_corta())
+socio1._prestamos_activos = 3
+print(socio1.puede_prestar)
+socio1.permitir_cambio_max()
+print(socio1.descripcion_corta())
+socio1.max_prestamos = 4
+print(socio1.descripcion_corta())
+socio1.puede_prestar
+print(socio1.descripcion_corta())
+socio1._prestamos_activos = 4
+print(socio1.puede_prestar)
+socio1.sancionar()
+print(socio1.descripcion_corta())
+print(socio1.puede_prestar)
 
 
 
