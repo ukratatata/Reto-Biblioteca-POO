@@ -41,6 +41,11 @@ class TipoDispositivo(Enum):
     CALCULADORA = "Calculadora"
     OTROS = "Otros"
 
+class RolEmpleado(Enum):
+    BIBLIOTECARIO = "Bibliotecario"
+    AUXILIAR = "Auxiliar"
+    ADMIN = "Administrador"
+
 # 2. Clase Abstracta Base (El Contrato)
 class Material(ABC):
     """
@@ -333,10 +338,10 @@ class RecursoDigital(Material):
             raise ValueError("La cantidad de licencias a retirar debe ser un número entero.")
         if 0 < cantidad <= self._licencias_disponibles:
             self.licencias_totales -= cantidad
-            return True     # Plantear la posibilidad de retirar licencias aunque no estén disponibles (hacer que el usuario pierda el acceso a ese recurso siendo notificado del motivo)
+            return True
         else: 
             raise ValueError("No se pueden retirar más licencias de las " \
-            "disponibles, retira licencias prestadas. ")
+            "disponibles, devuelve licencias prestadas. ") # Plantear anular las licencias prestadas automaticamente con un script en un futuro.
 
     def descripcion_corta(self) -> str:
         return (
@@ -351,14 +356,12 @@ class Usuario(ABC):
     def __init__(self, 
                  id_usuario: str, 
                  nombre: str, 
-                 apellido: str, 
-                 email: str, 
-                 apellido2: str = None):
+                 apellidos: str, 
+                 email: str):
         self._id_usuario = id_usuario
         self._nombre = nombre
-        self._apellido = apellido
+        self._apellidos = apellidos
         self._email = email
-        self._apellido2 = apellido2
 
     @property
     def id_usuario(self): 
@@ -368,17 +371,50 @@ class Usuario(ABC):
     def nombre(self): 
         return self._nombre
     
+    @nombre.setter
+    def nombre(self, nuevo_nombre):
+        if not nuevo_nombre or type(nuevo_nombre) != str:
+            raise ValueError("El nombre debe ser un texto válido.")
+        self._nombre = nuevo_nombre.strip()
+    
     @property
-    def apellido(self): 
-        return self._apellido
+    def apellidos(self): 
+        return self._apellidos
+    
+    @apellidos.setter
+    def apellidos(self, nuevos_apellidos):
+        if not nuevos_apellidos or type(nuevos_apellidos) != str:
+            raise ValueError("Introduce apellidos válidos.")
+        self.apellidos = nuevos_apellidos.strip()
 
     @property
     def email(self): 
         return self._email
     
-    @property
-    def apellido2(self):
-        return self._apellido2
+    @email.setter
+    def email(self, nuevo_email):
+        #   Comprobamos que no esté vacío y sea un texto
+        if not nuevo_email or type(nuevo_email) != str:
+            raise ValueError("El email no puede estar vacío.")
+            
+        nuevo_email = nuevo_email.strip() # Quitamos espacios en blanco a los lados
+
+        # Para verificar formato cortamos el email por la @
+        trozos = nuevo_email.split("@")
+        
+        # Si no hay exactamente 2 trozos, es que no había '@' o había más de una
+        if len(trozos) != 2:
+            raise ValueError("Formato de email no válido.")
+            
+        # Guardamos la segunda parte (el dominio) en una variable
+        dominio = trozos[1]
+        
+        # Comprobamos si hay un punto en el dominio
+        if "." not in dominio:
+            raise ValueError("Formato de email no válido.")
+            
+        # En caso de pasar todas las comprobaciones, asignamos el nuevo email al usuario
+        self._email = nuevo_email
 
     @abstractmethod
     def descripcion_corta(self) -> str: 
@@ -389,15 +425,14 @@ class Socio(Usuario):
     def __init__(self, 
                  id_usuario,
                  nombre,
-                 apellido,
-                 email,
-                 apellido2 = None,
+                 apellidos,
+                 email,            
                  sancionado=False,
                  prestamos_activos= 0,
                  max_prestamos=ConfiguracionBiblioteca.MAX_PRESTAMOS,
                  max_especial = False):
 
-        super().__init__(id_usuario, nombre, apellido, email, apellido2 = apellido2)
+        super().__init__(id_usuario, nombre, apellidos, email)
 
         self._sancionado = sancionado # determina si el socio puede prestar
         self._prestamos_activos = prestamos_activos # cuantos prestamos tiene el usuario
@@ -474,19 +509,47 @@ class Socio(Usuario):
         else:
             estado += ". Max no especial"
 
-        return (f"[{self.id_usuario}] {self.nombre} {self.apellido} - "
-            f"Max prestamos: {self.max_prestamos} - Socio {estado}")
+        return (
+            f"[{self.id_usuario}] {self.nombre} {self.apellidos} - "
+            f"Max prestamos: {self.max_prestamos} - Socio {estado}"
+        )
 
 
-class Bibliotecario(Usuario):
+class Empleado(Usuario):
 
-    def __init__(self, id_usuario, nombre, apellido, email, apellido2 = None):
+    def __init__(self, id_usuario,
+                 nombre, apellidos,
+                 email,
+                 rol = RolEmpleado.AUXILIAR):
 
-        super().__init__(id_usuario, nombre, apellido, email, apellido2 = apellido2)
+        super().__init__(id_usuario, nombre, apellidos, email)
+        self._rol = rol
+    
+    @property
+    def rol(self):
+        return self._rol
+    
+    def hacer_admin(self):
+        self._rol = RolEmpleado.ADMIN
+
+    def hacer_bibliotecario(self):
+        self._rol = RolEmpleado.BIBLIOTECARIO
+
+    def hacer_bibliotecario(self):
+        self._rol = RolEmpleado.BIBLIOTECARIO
+
+    def hacer_auxiliar(self):
+        self._rol = RolEmpleado.AUXILIAR
+
+    def es_admin(self):
+        return self._rol == RolEmpleado.ADMIN
+    
+    def es_bibliotecario_o_superior(self):
+        return self._rol in [RolEmpleado.ADMIN, RolEmpleado.BIBLIOTECARIO]
         
     def descripcion_corta(self):
 
-        return f"[{self.id_usuario}] {self.nombre} {self.apellido} · Bibliotecario"
+        return f"[{self.id_usuario}] {self.nombre} {self.apellidos} · {self.rol.value}"
 
 
 
@@ -504,33 +567,58 @@ juego2 = JuegoDeMesa("J001", "Catan", "Devir", "Pasillo 2, Estante A", 4)
 juego3 = JuegoDeMesa("J001", "Catan", "Devir", "Pasillo 2, Estante A", max_jugadores = 3)
 recurso1 = RecursoDigital("R001", "Guía de Python", "https://python.org", 5)
 
-print(recurso1.descripcion_corta(), "inicio")
-recurso1.licencias_totales = 10
-print(recurso1.descripcion_corta(), "cambio licencias totales")
-recurso1.prestar()
-recurso1.prestar()
-print(recurso1.descripcion_corta(), "dos licencias prestadas")
-recurso1.prestar()
-recurso1.prestar()
-recurso1.prestar()
-recurso1.prestar()
-recurso1.prestar()
-recurso1.prestar()
-recurso1.prestar()
-recurso1.prestar()
-recurso1.prestar()
-print(recurso1.descripcion_corta(), "10 licencias prestadas")
-recurso1.devolver()
-recurso1.devolver()
-print(recurso1.descripcion_corta(), "devolucion de 2 licencias")
-# recurso1.retirar_licencias(3)
-# print(recurso1.descripcion_corta(), "retirada de 3 licencias")
-recurso1.retirar_licencias(2)
-print(recurso1.descripcion_corta(), "retirada de 2 licencias")
-recurso1.devolver()
-print(recurso1.descripcion_corta(), "devolucion de 1 licencia")
-recurso1.anadir_licencias(4)
-print(recurso1.descripcion_corta(), "añadir de 4 licencia")
+empleado1 = Empleado("EM0001", "Paola", "Santana", "Paola.Santana@gmail.com")
+
+print(empleado1.descripcion_corta())
+print(empleado1.es_admin(), "admin")
+print(empleado1.es_bibliotecario_o_superior(), "admin o bibliotecario")
+empleado1.hacer_admin()
+print(empleado1.es_admin(), "admin")
+print(empleado1.es_bibliotecario_o_superior(), "admin o bibliotecario")
+print(empleado1.descripcion_corta())
+empleado1.hacer_bibliotecario()
+print(empleado1.es_admin(), "admin")
+print(empleado1.es_bibliotecario_o_superior(), "admin o bibliotecario")
+print(empleado1.descripcion_corta())
+empleado1.hacer_auxiliar()
+print(empleado1.descripcion_corta())
+print(empleado1.es_admin(), "admin")
+print(empleado1.es_bibliotecario_o_superior(), "admin o bibliotecario")
+print(empleado1.descripcion_corta())
+
+print(empleado1.descripcion_corta())
+
+print(empleado1.descripcion_corta())
+
+
+
+# print(recurso1.descripcion_corta(), "inicio")
+# recurso1.licencias_totales = 10
+# print(recurso1.descripcion_corta(), "cambio licencias totales")
+# recurso1.prestar()
+# recurso1.prestar()
+# print(recurso1.descripcion_corta(), "dos licencias prestadas")
+# recurso1.prestar()
+# recurso1.prestar()
+# recurso1.prestar()
+# recurso1.prestar()
+# recurso1.prestar()
+# recurso1.prestar()
+# recurso1.prestar()
+# recurso1.prestar()
+# recurso1.prestar()
+# print(recurso1.descripcion_corta(), "10 licencias prestadas")
+# recurso1.devolver()
+# recurso1.devolver()
+# print(recurso1.descripcion_corta(), "devolucion de 2 licencias")
+# # recurso1.retirar_licencias(3)
+# # print(recurso1.descripcion_corta(), "retirada de 3 licencias")
+# recurso1.retirar_licencias(2)
+# print(recurso1.descripcion_corta(), "retirada de 2 licencias")
+# recurso1.devolver()
+# print(recurso1.descripcion_corta(), "devolucion de 1 licencia")
+# recurso1.anadir_licencias(4)
+# print(recurso1.descripcion_corta(), "añadir de 4 licencia")
 # print(libro1.descripcion_corta())
 # print(dispositivo1.descripcion_corta()) 
 # print(juego1.descripcion_corta())
