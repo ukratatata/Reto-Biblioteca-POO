@@ -56,7 +56,7 @@ class Material(ABC):
     def __init__(self, codigo_id: str, titulo: str, estado: EstadoMaterial = EstadoMaterial.DISPONIBLE):
         # Atributos protegidos (Encapsulación básica)
         self._codigo_id = codigo_id
-        self._titulo = titulo
+        self.titulo = titulo
         self._estado = estado # Estado inicial por defecto: Disponible
 
     # -- Getters básicos para acceder a la información de forma segura --
@@ -67,6 +67,12 @@ class Material(ABC):
     @property
     def titulo(self) -> str:
         return self._titulo
+    
+    @titulo.setter
+    def titulo(self, nuevo_titulo):
+        if not nuevo_titulo or type(nuevo_titulo) != str:
+            raise ValueError("Introduce un título válido.")
+        self._titulo = nuevo_titulo.strip()
         
     @property
     def estado(self) -> EstadoMaterial:
@@ -119,11 +125,20 @@ class MaterialFisico(Material):
                  ubicacion: str = None,
                  estado: EstadoMaterial = EstadoMaterial.DISPONIBLE):
         super().__init__(codigo_id, titulo, estado=estado)
-        self._ubicacion = ubicacion  # Ej: "Pasillo 4, Estante B"
+        self.ubicacion = ubicacion  # Ej: "Pasillo 4, Estante B"
 
-    @property   # Por ver como hacer para cuando este pendiente de recogida, para que el bibliotecario 
-    def ubicacion(self) -> str: # pueda ver ubicacion pero no el usuario que veria "recoger en mostrador".     
+    @property    
+    def ubicacion(self) -> str:     
         return self._ubicacion
+    
+    @ubicacion.setter
+    def ubicacion(self, nueva_ubicacion):
+        if nueva_ubicacion is not None:
+            if type(nueva_ubicacion) != str:
+                raise ValueError("Formato no válido.")
+            self._ubicacion = nueva_ubicacion.strip()
+        else:
+            self._ubicacion = None
     
     # Implementamos la lógica común de préstamo físico para no repetirla
     def reservar_recogida(self) -> bool:
@@ -165,11 +180,21 @@ class Libro(MaterialFisico):
         super().__init__(codigo_id, titulo, ubicacion=ubicacion, estado=estado)
         self._autor = autor
         self._paginas = paginas
-        self._isbn = isbn
+        self.isbn = isbn
 
     @property
     def isbn(self):
         return self._isbn
+    
+    @isbn.setter
+    def isbn(self, nuevo_isbn):
+        # Permitimos None por si es un libro antiguo sin ISBN.
+        if nuevo_isbn != None:
+            if type(nuevo_isbn) != str:
+                raise ValueError("Formato no válido.")
+            self._isbn = nuevo_isbn.strip()
+        else:
+            self._isbn = None
     
     @property
     def autor(self):
@@ -315,8 +340,7 @@ class RecursoDigital(Material):
     def prestar(self) -> bool:
         if self._licencias_disponibles > 0: # Si hay licencias disponibles, se puede prestar
             self._licencias_disponibles -= 1
-            if self._licencias_disponibles == 0:
-                self._estado = EstadoMaterial.PRESTADO
+            self.actualizar_estado()
             return True
         return False
 
@@ -359,9 +383,9 @@ class Usuario(ABC):
                  apellidos: str, 
                  email: str):
         self._id_usuario = id_usuario
-        self._nombre = nombre
-        self._apellidos = apellidos
-        self._email = email
+        self.nombre = nombre
+        self.apellidos = apellidos
+        self.email = email
 
     @property
     def id_usuario(self): 
@@ -385,7 +409,7 @@ class Usuario(ABC):
     def apellidos(self, nuevos_apellidos):
         if not nuevos_apellidos or type(nuevos_apellidos) != str:
             raise ValueError("Introduce apellidos válidos.")
-        self.apellidos = nuevos_apellidos.strip()
+        self._apellidos = nuevos_apellidos.strip()
 
     @property
     def email(self): 
@@ -495,8 +519,8 @@ class Socio(Usuario):
         else:
             self._max_especial = True
 
-    def sancionar(self):
-        self._sancionado = False if self._sancionado else True
+    def cambiar_sancionar(self):
+        self._sancionado = not self._sancionado
 
     def descripcion_corta(self):
 
@@ -529,17 +553,11 @@ class Empleado(Usuario):
     def rol(self):
         return self._rol
     
-    def hacer_admin(self):
-        self._rol = RolEmpleado.ADMIN
-
-    def hacer_bibliotecario(self):
-        self._rol = RolEmpleado.BIBLIOTECARIO
-
-    def hacer_bibliotecario(self):
-        self._rol = RolEmpleado.BIBLIOTECARIO
-
-    def hacer_auxiliar(self):
-        self._rol = RolEmpleado.AUXILIAR
+    @rol.setter
+    def rol(self, nuevo_rol: RolEmpleado):
+        if type(nuevo_rol) != RolEmpleado:
+            raise ValueError("Rol no válido.")
+        self._rol = nuevo_rol
 
     def es_admin(self):
         return self._rol == RolEmpleado.ADMIN
@@ -552,7 +570,63 @@ class Empleado(Usuario):
         return f"[{self.id_usuario}] {self.nombre} {self.apellidos} · {self.rol.value}"
 
 
+from datetime import datetime, timedelta
 
+
+# Creamos nuestro propio tipo de error para cuando el material no está disponible
+
+class MaterialNoDisponibleExcepcion(Exception):
+    """Error que usamos cuando alguien pide un material que no está disponible."""
+    def __init__(self, titulo):
+        super().__init__(f"'{titulo}' no está disponible.")
+
+
+def prestar(material, usuario, prestamos):
+    """
+    Función principal para hacer un préstamo.
+    Antes de hacerlo mira si el material está libre, si el usuario
+    puede pedir cosas y si no se ha pasado de su límite.
+    """
+
+    # Si el material no está disponible no sigue
+    if material.estado != "Disponible":
+        raise MaterialNoDisponibleExcepcion(material.titulo)
+
+    # Si el usuario tiene sanciones no puede pedir nada
+    if usuario.sancionado:
+        raise ValueError(f"'{usuario.nombre}' tiene sanciones activas.")
+
+    # Mira cuántos préstamos tiene abiertos este usuario
+    PrestamosActivos = [p for p in prestamos if p["usuario"] == usuario.nombre and p["activo"]]
+    if len(PrestamosActivos) >= usuario.limite_prestamos:
+        raise ValueError(
+            f"'{usuario.nombre}' ya tiene {usuario.limite_prestamos} préstamo(s) activo(s), que es su límite."
+        )
+
+    # Coge la fecha de hoy y le suma 15 días para saber cuándo tiene que devolver
+    hoy = datetime.now()
+    devolucion = hoy + timedelta(days=15)
+
+    # Se marca el material como prestado para que nadie más pueda pedirlo
+    material.estado = "Prestado"
+
+    # Guarda todos los datos del préstamo en un diccionario
+    NuevoPrestamo = {
+        "usuario": usuario.nombre,
+        "material": material.titulo,
+        "fecha_prestamo": hoy.strftime("%d/%m/%Y"),
+        "fecha_devolucion": devolucion.strftime("%d/%m/%Y"),
+        "activo": True
+    }
+
+    # Mete el préstamo en la lista general
+    prestamos.append(NuevoPrestamo)
+
+    print(f"Préstamo OK: '{material.titulo}' → '{usuario.nombre}'")
+    print(f"  Prestado:   {NuevoPrestamo['fecha_prestamo']}")
+    print(f"  Devolver:   {NuevoPrestamo['fecha_devolucion']}")
+
+    return NuevoPrestamo
 
 
 
@@ -572,15 +646,15 @@ empleado1 = Empleado("EM0001", "Paola", "Santana", "Paola.Santana@gmail.com")
 print(empleado1.descripcion_corta())
 print(empleado1.es_admin(), "admin")
 print(empleado1.es_bibliotecario_o_superior(), "admin o bibliotecario")
-empleado1.hacer_admin()
+empleado1.rol = RolEmpleado.ADMIN
 print(empleado1.es_admin(), "admin")
 print(empleado1.es_bibliotecario_o_superior(), "admin o bibliotecario")
 print(empleado1.descripcion_corta())
-empleado1.hacer_bibliotecario()
+empleado1.rol = RolEmpleado.BIBLIOTECARIO
 print(empleado1.es_admin(), "admin")
 print(empleado1.es_bibliotecario_o_superior(), "admin o bibliotecario")
 print(empleado1.descripcion_corta())
-empleado1.hacer_auxiliar()
+empleado1.rol = RolEmpleado.AUXILIAR
 print(empleado1.descripcion_corta())
 print(empleado1.es_admin(), "admin")
 print(empleado1.es_bibliotecario_o_superior(), "admin o bibliotecario")
