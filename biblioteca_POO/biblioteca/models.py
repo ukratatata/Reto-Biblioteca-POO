@@ -109,8 +109,11 @@ class Material(ABC):
 
 class MaterialFisico(Material):
     """Clase intermedia para todo lo que ocupa espacio en la biblioteca."""
-    def __init__(self, codigo_id: str, titulo: str, ubicacion: str = None):
-        super().__init__(codigo_id, titulo)
+    def __init__(self, codigo_id: str,
+                 titulo: str,
+                 ubicacion: str = None,
+                 estado: EstadoMaterial = EstadoMaterial.DISPONIBLE):
+        super().__init__(codigo_id, titulo, estado=estado)
         self._ubicacion = ubicacion  # Ej: "Pasillo 4, Estante B"
 
     @property   # Por ver como hacer para cuando este pendiente de recogida, para que el bibliotecario 
@@ -149,11 +152,12 @@ class Libro(MaterialFisico):
     def __init__(self, 
                  codigo_id: str, 
                  titulo: str, 
-                 ubicacion: str, 
                  autor: str = None, 
                  paginas: int = None,  
-                 isbn = None):
-        super().__init__(codigo_id, titulo, ubicacion)
+                 isbn:str = None,
+                 ubicacion: str = None,
+                 estado: EstadoMaterial = EstadoMaterial.DISPONIBLE):
+        super().__init__(codigo_id, titulo, ubicacion=ubicacion, estado=estado)
         self._autor = autor
         self._paginas = paginas
         self._isbn = isbn
@@ -183,12 +187,13 @@ class Dispositivo(MaterialFisico):  # Para ordenadores, tablets, e-readers, calc
     def __init__(self, 
                  codigo_id: str, 
                  titulo: str, 
-                 ubicacion: str, 
                  tipo_dispositivo: TipoDispositivo, 
                  fabricante: str = None, 
                  so: str = None, 
-                 numero_serie: str = None):
-        super().__init__(codigo_id, titulo, ubicacion)
+                 numero_serie: str = None,
+                 ubicacion: str = None,
+                 estado: EstadoMaterial = EstadoMaterial.DISPONIBLE):
+        super().__init__(codigo_id, titulo, ubicacion = ubicacion, estado = estado)
         self._tipo_dispositivo = tipo_dispositivo
         self._fabricante = fabricante
         self._so = so  # Sistema Operativo
@@ -220,14 +225,15 @@ class Dispositivo(MaterialFisico):  # Para ordenadores, tablets, e-readers, calc
 
 
 class JuegoDeMesa(MaterialFisico):  # Para juegos de mesa, rol, cartas, etc. que se prestan físicamente pero no son libros ni dispositivos tecnológicos
-    def __init__(self, codigo_id: str, 
-                 titulo: str, 
-                 ubicacion: str, 
-                 editorial: str = None, 
-                 min_jugadores: int = None, 
-                 max_jugadores: int = None): # Estaria bien tipear a int aunque se pueda none?
+    def __init__(self, codigo_id: str,
+                 titulo: str,
+                 editorial: str = None,
+                 min_jugadores: int = None,
+                 max_jugadores: int = None,
+                 ubicacion: str = None,
+                 estado: EstadoMaterial = EstadoMaterial.DISPONIBLE): # Estaria bien tipear a int aunque se pueda none?
         
-        super().__init__(codigo_id, titulo, ubicacion)
+        super().__init__(codigo_id, titulo, ubicacion = ubicacion, estado = estado)
         self._editorial = editorial
         self._min_jugadores = min_jugadores
         self._max_jugadores = max_jugadores
@@ -262,9 +268,10 @@ class RecursoDigital(Material):
     def __init__(self,
                  codigo_id: str,
                  titulo: str,
-                 url: str,
-                 licencias_totales: int):
-        super().__init__(codigo_id, titulo)
+                 url: str = None,
+                 licencias_totales: int = 1,
+                 estado: EstadoMaterial = EstadoMaterial.DISPONIBLE):
+        super().__init__(codigo_id, titulo, estado = estado)
         self._url = url
         self._licencias_totales = licencias_totales
         self._licencias_disponibles = licencias_totales
@@ -280,6 +287,24 @@ class RecursoDigital(Material):
     @property
     def licencias_disponibles(self):
         return self._licencias_disponibles
+    
+    @licencias_totales.setter
+    def licencias_totales(self, nuevas_licencias):
+        if type(nuevas_licencias) != int or nuevas_licencias < 0:
+            raise ValueError("El número total de licencias debe ser un número " \
+            "entero mayor o igual a 0.")
+        diferencia = nuevas_licencias - self._licencias_totales
+        self._licencias_totales = nuevas_licencias
+        self._licencias_disponibles += diferencia
+        self.actualizar_estado()
+
+    def actualizar_estado(self): # Método para actualizar el estado segun licencias
+        if self._licencias_totales == 0:
+            self._estado = EstadoMaterial.NO_DISPONIBLE
+        elif self._licencias_disponibles <= 0:
+            self._estado = EstadoMaterial.PRESTADO
+        else:
+            self._estado = EstadoMaterial.DISPONIBLE
 
     # POLIMORFISMO: El préstamo digital funciona restando licencias
     def prestar(self) -> bool:
@@ -293,43 +318,47 @@ class RecursoDigital(Material):
     def devolver(self) -> bool:
         if self._licencias_disponibles < self._licencias_totales:
             self._licencias_disponibles += 1
-            self._estado = EstadoMaterial.DISPONIBLE
+            self.actualizar_estado()
             return True
         return False
 
-    def añadir_licencias(self, cantidad: int) -> bool:
+    def anadir_licencias(self, cantidad: int) -> bool:
         if cantidad > 0:
-            self._licencias_totales += cantidad
-            self._licencias_disponibles += cantidad
-            self._estado = EstadoMaterial.DISPONIBLE
+            self.licencias_totales += cantidad
             return True
         return False
     
     def retirar_licencias(self, cantidad: int) -> bool:
+        if type(cantidad) != int:
+            raise ValueError("La cantidad de licencias a retirar debe ser un número entero.")
         if 0 < cantidad <= self._licencias_disponibles:
-            self._licencias_totales -= cantidad
-            self._licencias_disponibles -= cantidad
-            if self._licencias_totales == 0:
-                self._estado = EstadoMaterial.NO_DISPONIBLE
-            if self._licencias_disponibles == 0:
-                self._estado = EstadoMaterial.PRESTADO
+            self.licencias_totales -= cantidad
             return True     # Plantear la posibilidad de retirar licencias aunque no estén disponibles (hacer que el usuario pierda el acceso a ese recurso siendo notificado del motivo)
-        return False
+        else: 
+            raise ValueError("No se pueden retirar más licencias de las " \
+            "disponibles, retira licencias prestadas. ")
 
     def descripcion_corta(self) -> str:
         return (
             f"[{self.codigo_id}] Digital: '{self.titulo}' - "
-                f"Licencias libres: {self._licencias_disponibles}/{self._licencias_totales}"
+            f"Licencias libres: {self._licencias_disponibles}/{self._licencias_totales} "
+            f"- Estado: {self.estado.value}"
         )
 
 
 class Usuario(ABC):
 
-    def __init__(self, id_usuario: str, nombre: str, apellido: str, email: str):
+    def __init__(self, 
+                 id_usuario: str, 
+                 nombre: str, 
+                 apellido: str, 
+                 email: str, 
+                 apellido2: str = None):
         self._id_usuario = id_usuario
         self._nombre = nombre
         self._apellido = apellido
         self._email = email
+        self._apellido2 = apellido2
 
     @property
     def id_usuario(self): 
@@ -346,6 +375,10 @@ class Usuario(ABC):
     @property
     def email(self): 
         return self._email
+    
+    @property
+    def apellido2(self):
+        return self._apellido2
 
     @abstractmethod
     def descripcion_corta(self) -> str: 
@@ -358,12 +391,13 @@ class Socio(Usuario):
                  nombre,
                  apellido,
                  email,
+                 apellido2 = None,
                  sancionado=False,
                  prestamos_activos= 0,
                  max_prestamos=ConfiguracionBiblioteca.MAX_PRESTAMOS,
                  max_especial = False):
 
-        super().__init__(id_usuario, nombre, apellido, email)
+        super().__init__(id_usuario, nombre, apellido, email, apellido2 = apellido2)
 
         self._sancionado = sancionado # determina si el socio puede prestar
         self._prestamos_activos = prestamos_activos # cuantos prestamos tiene el usuario
@@ -380,7 +414,7 @@ class Socio(Usuario):
 
     @property
     def max_prestamos(self):
-        if self._max_especial:
+        if self.max_especial:
             return self._max_prestamos
         else:
             return ConfiguracionBiblioteca.MAX_PRESTAMOS
@@ -406,6 +440,18 @@ class Socio(Usuario):
         if self._sancionado or (self._prestamos_activos >= self.max_prestamos):
             return False
         return True
+
+    def incrementar_prestamos(self):
+        if self.puede_prestar:
+            self._prestamos_activos += 1
+            return True
+        return False
+    
+    def reducir_prestamos(self):
+        if self.prestamos_activos >0:
+            self._prestamos_activos -= 1
+            return True
+        return False
     
     def permitir_cambio_max(self): # Permite que el bibliotecario le asigne un max diferente
         if self.max_especial:
@@ -424,9 +470,9 @@ class Socio(Usuario):
         else:
             estado = "activo"
         if self.max_especial:
-            estado += " Max especial"
+            estado += ". Max especial"
         else:
-            estado += " Max no especial"
+            estado += ". Max no especial"
 
         return (f"[{self.id_usuario}] {self.nombre} {self.apellido} - "
             f"Max prestamos: {self.max_prestamos} - Socio {estado}")
@@ -434,52 +480,13 @@ class Socio(Usuario):
 
 class Bibliotecario(Usuario):
 
-    def __init__(self, id_usuario, nombre, apellido, sancionado=False, max_prestamos=3):
+    def __init__(self, id_usuario, nombre, apellido, email, apellido2 = None):
 
-        super().__init__(id_usuario, nombre, apellido)
-
-        self.sancionado = bool(sancionado)
-        self.max_prestamos = int(max_prestamos)
-
-    def puede_prestar(self, numero_prestamos_activos):
-
-        if self.sancionado:
-            estado = "sancionado"
-        else:
-            estado = "activo" 
-
-        if self.sancionado:
-            return False
-        if numero_prestamos_activos >= self.max_prestamos:
-            return False
-            
-        return True
-        
-        return f"[{self.id_usuario} {self.nombre} {self.apellido} - Socio {(estado)}]"
+        super().__init__(id_usuario, nombre, apellido, email, apellido2 = apellido2)
         
     def descripcion_corta(self):
 
-        if self.sancionado:
-            estado = "sancionado"
-        else:
-            estado = "activo"
-
-        return f"[{self.id_usuario}] {self.nombre} {self.apellido} · Socio {estado}"
-    
-    def añadir_libro(self, biblioteca, libro):
-
-        biblioteca.catalogo.append(libro)
-
-        return f"Libro '{libro.titulo}' añadido."
-    
-    def quitar_libro(self, biblioteca, codigo):
-
-        for libro in biblioteca.catalogo:
-            if libro.codigo == codigo:
-                biblioteca.catalogo.remove(libro)
-                return f"Libro {codigo} eliminado."
-            
-        return "Libro no encontrado."
+        return f"[{self.id_usuario}] {self.nombre} {self.apellido} · Bibliotecario"
 
 
 
@@ -490,40 +497,69 @@ class Bibliotecario(Usuario):
 
 
 
-libro1 = Libro("L001", "El Quijote", "Pasillo 4, Estante B", "Miguel de Cervantes", 863, "978-3-16-148410-0")
-dispositivo1 = Dispositivo("D001", "iPad Pro", "Mostrador Principal", TipoDispositivo.TABLET, fabricante="Apple", so="iOS")
-juego1 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", 3, 4)
-juego2 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", 4)
-juego3 = JuegoDeMesa("J001", "Catan", "Pasillo 2, Estante A", "Devir", max_jugadores = 3)
+libro1 = Libro("L001", "El Quijote", "Miguel de Cervantes", 863, "978-3-16-148410-0", "Pasillo 4, Estante B", EstadoMaterial.NO_DISPONIBLE)
+dispositivo1 = Dispositivo("D001", "iPad Pro", TipoDispositivo.TABLET, ubicacion = "Mostrador Principal", fabricante="Apple", so="iOS")
+juego1 = JuegoDeMesa("J001", "Catan", "Devir", "Pasillo 2, Estante A", 3, 4)
+juego2 = JuegoDeMesa("J001", "Catan", "Devir", "Pasillo 2, Estante A", 4)
+juego3 = JuegoDeMesa("J001", "Catan", "Devir", "Pasillo 2, Estante A", max_jugadores = 3)
 recurso1 = RecursoDigital("R001", "Guía de Python", "https://python.org", 5)
 
+print(recurso1.descripcion_corta(), "inicio")
+recurso1.licencias_totales = 10
+print(recurso1.descripcion_corta(), "cambio licencias totales")
+recurso1.prestar()
+recurso1.prestar()
+print(recurso1.descripcion_corta(), "dos licencias prestadas")
+recurso1.prestar()
+recurso1.prestar()
+recurso1.prestar()
+recurso1.prestar()
+recurso1.prestar()
+recurso1.prestar()
+recurso1.prestar()
+recurso1.prestar()
+recurso1.prestar()
+print(recurso1.descripcion_corta(), "10 licencias prestadas")
+recurso1.devolver()
+recurso1.devolver()
+print(recurso1.descripcion_corta(), "devolucion de 2 licencias")
+# recurso1.retirar_licencias(3)
+# print(recurso1.descripcion_corta(), "retirada de 3 licencias")
+recurso1.retirar_licencias(2)
+print(recurso1.descripcion_corta(), "retirada de 2 licencias")
+recurso1.devolver()
+print(recurso1.descripcion_corta(), "devolucion de 1 licencia")
+recurso1.anadir_licencias(4)
+print(recurso1.descripcion_corta(), "añadir de 4 licencia")
+# print(libro1.descripcion_corta())
+# print(dispositivo1.descripcion_corta()) 
+# print(juego1.descripcion_corta())
+# print(juego2.descripcion_corta())
+# print(juego3.descripcion_corta())
+# print(recurso1.descripcion_corta())
 
-print(libro1.descripcion_corta())
-print(dispositivo1.descripcion_corta()) 
-print(juego1.descripcion_corta())
-print(juego2.descripcion_corta())
-print(juego3.descripcion_corta())
-print(recurso1.descripcion_corta())
-
-print(dispositivo1.estado)
-print(dispositivo1.tipo_dispositivo)
+# print(dispositivo1.estado)
+# print(dispositivo1.tipo_dispositivo)
 
 
-socio1 = Socio("S0001", "Paola", "Santana", "Paola.Santana@gmail.com" )
-print(socio1.descripcion_corta())
-socio1._prestamos_activos = 3
-print(socio1.puede_prestar)
-socio1.permitir_cambio_max()
-print(socio1.descripcion_corta())
-socio1.max_prestamos = 4
-print(socio1.descripcion_corta())
-socio1.puede_prestar
-print(socio1.descripcion_corta())
-socio1._prestamos_activos = 4
-print(socio1.puede_prestar)
-socio1.sancionar()
-print(socio1.descripcion_corta())
-print(socio1.puede_prestar)
+# socio1 = Socio("S0001", "Paola", "Santana", "Paola.Santana@gmail.com" )
+# print(socio1.descripcion_corta())
+# socio1._prestamos_activos = 3
+# print(socio1.puede_prestar)
+# socio1.permitir_cambio_max()
+# print(socio1.descripcion_corta())
+# socio1.max_prestamos = 4
+# print(socio1.descripcion_corta())
+# socio1.puede_prestar
+# print(socio1.descripcion_corta())
+# socio1._prestamos_activos = 4
+# print(socio1.puede_prestar)
+# socio1.sancionar()
+# print(socio1.descripcion_corta())
+# print(socio1.puede_prestar)
+
+
+# print(libro1.__dict__)
 
 
 
