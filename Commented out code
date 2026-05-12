@@ -1,4 +1,4 @@
-in models.py:
+# in models.py:
 
 
 
@@ -60,8 +60,6 @@ in models.py:
 #     print(f"  Devolver:   {NuevoPrestamo['fecha_devolucion']}")
 
 #     return NuevoPrestamo
-
-
 
 
 
@@ -149,7 +147,7 @@ in models.py:
 # print(socio1.descripcion_corta())
 # socio1._prestamos_activos = 4
 # print(socio1.puede_prestar)
-# socio1.sancionar()
+# socio1.cambiar_sancionar()
 # print(socio1.descripcion_corta())
 # print(socio1.puede_prestar)
 
