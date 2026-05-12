@@ -37,8 +37,8 @@ class EstadoMaterial(Enum):
     DISPONIBLE = "Disponible"                       # El material está en la biblioteca y se puede prestar
     PENDIENTE_RECOGIDA = "Pendiente de Recogida"    # El usuario tiene 2 días para venir a por él
     PRESTADO = "Prestado"                           # El usuario lo tiene en su casa (15 días...)
-    NO_DISPONIBLE = "No Disponible"                # Extra: Para materiales que no se pueden prestar (mantenimiento, extravio, retiro...)
-
+    NO_DISPONIBLE = "No Disponible"                 # Extra: Para materiales que no se pueden prestar (mantenimiento, extravio, retiro...)
+    BLOQUEADO = "Bloqueado"                         # Extra: Para materiales que se quieren bloquear para parar prestamos
 
 class EstadoPrestamo(Enum):
     ACTIVO = "Activo"
@@ -99,19 +99,26 @@ class Material(ABC):
         Cambia el estado a NO_DISPONIBLE, impidiendo cualquier préstamo.
         Útil para mantenimiento o extravío.
         """
-        if self._estado != EstadoMaterial.NO_DISPONIBLE:
-            self._estado = EstadoMaterial.NO_DISPONIBLE
+        if self._estado != EstadoMaterial.BLOQUEADO:
+            self._estado = EstadoMaterial.BLOQUEADO
             return True
         return False
     
     # -- MÉTODOS ABSTRACTOS (El Polimorfismo) --
-    
+    @abstractmethod
+    def puede_prestarse(self) -> bool:
+        """
+        Verifica si el material se puede prestar según su estado actual.
+        OBLIGATORIO: Cada subclase debe definir sus propias reglas de préstamo.
+        (Ej. Un libro solo se presta si está DISPONIBLE, un recurso digital si tiene licencias libres...)
+        """
+        pass
+
     @abstractmethod
     def prestar(self) -> bool:
         """
         Intenta prestar el material a un socio.
         OBLIGATORIO: Cada subclase debe implementar su propia lógica.
-        (Ej. Físico = cambiar estado; Digital = restar licencia)
         """
         pass
 
@@ -161,11 +168,19 @@ class MaterialFisico(Material):
             return True
         return False
 
+    def puede_prestarse(self) -> bool:
+        """Comprueba si el material se puede prestar."""
+        return self._estado == EstadoMaterial.DISPONIBLE
+
     def prestar(self) -> bool:
-        if self._estado == EstadoMaterial.DISPONIBLE:
+        if self.puede_prestarse():
             self._estado = EstadoMaterial.PRESTADO
             return True
-        elif self._estado == EstadoMaterial.PENDIENTE_RECOGIDA:
+        return False
+    
+    def recoger(self) -> bool:
+        """Simula que el usuario viene a recoger el material reservado."""
+        if self._estado == EstadoMaterial.PENDIENTE_RECOGIDA:
             self._estado = EstadoMaterial.PRESTADO
             return True
         return False
@@ -447,8 +462,12 @@ class RecursoDigital(Material):
         else:
             self._estado = EstadoMaterial.DISPONIBLE
 
-    def prestar(self) -> bool:
-        if self._licencias_disponibles > 0: # Si hay licencias disponibles, se puede prestar
+    def puede_prestarse(self) -> bool:
+        """Comprueba si el material se puede prestar."""
+        return self._licencias_disponibles > 0 and self.estado != EstadoMaterial.BLOQUEADO
+
+    def prestar(self) -> bool: # Si hay licencias disponibles y el material no esta bloqueado, se puede prestar, se puede prestar 
+        if self.puede_prestarse():
             self._licencias_disponibles -= 1
             self.actualizar_estado()
             return True
@@ -472,9 +491,6 @@ class RecursoDigital(Material):
             raise ValueError("La cantidad de licencias a retirar debe ser un número entero positivo.")
         self.licencias_totales -= cantidad
         return True
-    
-    def bloquear(self) -> bool:
-        pass
         
 
     def descripcion_corta(self) -> str:
