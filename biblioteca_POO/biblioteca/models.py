@@ -116,6 +116,11 @@ class Material(ABC):
         pass
 
     @abstractmethod
+    def puede_devolverse(self) -> bool:
+        """Comprueba si el material está en un estado que permita su devolución."""
+        pass
+
+    @abstractmethod
     def devolver(self) -> bool:
         """
         Procesa la devolución del material.
@@ -154,27 +159,44 @@ class MaterialFisico(Material):
         else:
             self._ubicacion = None
     
-    # Implementamos la lógica común de préstamo físico para no repetirla
+    # --- BLOQUE RESERVAR ---
+    def puede_reservarse(self) -> bool:
+        return self._estado == EstadoMaterial.DISPONIBLE
+
     def reservar_recogida(self) -> bool:
-        if self._estado == EstadoMaterial.DISPONIBLE:
+        if self.puede_reservarse():
             self._estado = EstadoMaterial.PENDIENTE_RECOGIDA
             return True
         return False
 
+    # --- BLOQUE PRESTAR ---
+    def puede_prestarse(self) -> bool:
+        return self._estado == EstadoMaterial.DISPONIBLE
+
     def prestar(self) -> bool:
-        if self._estado == EstadoMaterial.DISPONIBLE:
+        if self.puede_prestarse():
             self._estado = EstadoMaterial.PRESTADO
             return True
-        elif self._estado == EstadoMaterial.PENDIENTE_RECOGIDA:
+        return False
+    
+    # --- BLOQUE RECOGER ---
+    def puede_recogerse(self) -> bool:
+        return self._estado == EstadoMaterial.PENDIENTE_RECOGIDA
+
+    def recoger(self) -> bool:
+        """Simula que el usuario viene a recoger el material reservado."""
+        if self.puede_recogerse():
             self._estado = EstadoMaterial.PRESTADO
             return True
         return False
 
+    # --- BLOQUE DEVOLVER ---
+    def puede_devolverse(self) -> bool:
+        # Usamos el truco de 'in' para simplificar
+        return self._estado in [EstadoMaterial.PRESTADO, EstadoMaterial.PENDIENTE_RECOGIDA]
+
     def devolver(self) -> bool:
-        if self._estado == EstadoMaterial.PRESTADO:
-            self._estado = EstadoMaterial.DISPONIBLE
-            return True
-        elif self._estado == EstadoMaterial.PENDIENTE_RECOGIDA:
+        if self.puede_devolverse():
             self._estado = EstadoMaterial.DISPONIBLE
             return True
         return False
@@ -447,15 +469,23 @@ class RecursoDigital(Material):
         else:
             self._estado = EstadoMaterial.DISPONIBLE
 
+    def puede_prestarse(self) -> bool:
+        """Comprueba si el material se puede prestar."""
+        return self._licencias_disponibles > 0 and self.estado != EstadoMaterial.BLOQUEADO
+
     def prestar(self) -> bool:
-        if self._licencias_disponibles > 0: # Si hay licencias disponibles, se puede prestar
+        if self.puede_prestarse():
             self._licencias_disponibles -= 1
             self.actualizar_estado()
             return True
         return False
 
+    def puede_devolverse(self) -> bool:
+        """Comprueba si hay licencias prestadas que puedan devolverse."""
+        return self._licencias_disponibles < self._licencias_totales
+
     def devolver(self) -> bool:
-        if self._licencias_disponibles < self._licencias_totales:
+        if self.puede_devolverse():
             self._licencias_disponibles += 1
             self.actualizar_estado()
             return True
@@ -557,14 +587,14 @@ class Usuario(ABC):
 class Socio(Usuario):
 
     def __init__(self, 
-                 id_usuario,
-                 nombre,
-                 apellidos,
-                 email,            
-                 sancionado=False,
-                 prestamos_activos= 0,
-                 max_prestamos=ConfiguracionBiblioteca.MAX_PRESTAMOS,
-                 max_especial = False):
+                 id_usuario: str,
+                 nombre: str,
+                 apellidos: str,
+                 email: str,            
+                 sancionado: bool = False,
+                 prestamos_activos: int = 0,
+                 max_prestamos: int = ConfiguracionBiblioteca.MAX_PRESTAMOS,
+                 max_especial: bool = False):
 
         super().__init__(id_usuario, nombre, apellidos, email)
 
@@ -651,10 +681,10 @@ class Socio(Usuario):
 
 class Empleado(Usuario):
 
-    def __init__(self, id_usuario,
-                 nombre, apellidos,
-                 email,
-                 rol = RolEmpleado.AUXILIAR):
+    def __init__(self, id_usuario: str,
+                 nombre: str, apellidos: str,
+                 email: str,
+                 rol: RolEmpleado = RolEmpleado.AUXILIAR):
 
         super().__init__(id_usuario, nombre, apellidos, email)
         self._rol = rol
@@ -756,19 +786,23 @@ class Prestamo:
                 return True
         return False
 
+    def puede_finalizarse(self) -> bool:
+        """Un préstamo se puede finalizar si no ha sido devuelto ya."""
+        return self._estado != EstadoPrestamo.DEVUELTO
+
     def finalizar_prestamo(self) -> bool:
         """Registra la devolución del material y cierra el préstamo."""
-        if self._estado == EstadoPrestamo.DEVUELTO:
-            return False # Ya estaba devuelto, no hacemos nada
+        if not self.puede_finalizarse():
+            return False # Ya estaba devuelto, abortamos
             
         self._fecha_devolucion_real = datetime.now()
         
         # Aquí verificamos si se entregó tarde
         entregado_tarde = self._fecha_devolucion_real > self._fecha_devolucion_prevista
-        if entregado_tarde and self._usuario.sancionado: 
+        if entregado_tarde and self._usuario.sancionado is False: 
             self._usuario.cambiar_sancionar() # Sancionamos al usuario por entregar tarde
+            
         self._estado = EstadoPrestamo.DEVUELTO
-        
         return True
 
     def extender_prestamo(self, dias_extra: int) -> bool:
