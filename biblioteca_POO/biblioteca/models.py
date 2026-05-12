@@ -502,9 +502,6 @@ class RecursoDigital(Material):
             raise ValueError("La cantidad de licencias a retirar debe ser un número entero positivo.")
         self.licencias_totales -= cantidad
         return True
-    
-    def bloquear(self) -> bool:
-        pass
         
 
     def descripcion_corta(self) -> str:
@@ -728,9 +725,9 @@ class Prestamo:
         # Fecha de prestamo se asigna en funcion de la configurada para cada tipo de material, o la por defecto si no se especifica.
         self._fecha_prestamo = datetime.now() # Fecha y hora actual exacta
         if dias_prestamo is None:
-            if type(material) == Dispositivo:
+            if isinstance(material, Dispositivo):
                 dias_prestamo = ConfiguracionBiblioteca.TIEMPO_PRESTAMO_DISPOSITIVOS
-            elif type(material) == JuegoDeMesa:
+            elif isinstance(material, JuegoDeMesa):
                 dias_prestamo = ConfiguracionBiblioteca.TIEMPO_PRESTAMO_JUEGOS_MESA
             else:
                 dias_prestamo = ConfiguracionBiblioteca.TIEMPO_PRESTAMO_DEFECTO
@@ -738,8 +735,17 @@ class Prestamo:
         # Calculamos la fecha de devolución sumando los días (timedelta)
         if type(dias_prestamo) != int or dias_prestamo <= 0:
             raise ValueError("Los días de préstamo deben ser un número entero positivo.")
-            
-        self._fecha_devolucion_prevista = self._fecha_prestamo + timedelta(days=dias_prestamo)
+
+        # Sumamos a la fecha del prestamo el numero de dias    
+        fecha_base = self._fecha_prestamo + timedelta(days=dias_prestamo)
+
+        # Establecemos la hora de devolucion que la hora de entrega límite sea las 23:59:59
+        self._fecha_devolucion_prevista = fecha_base.replace(
+            hour=23, 
+            minute=59, 
+            second=59, 
+            microsecond=0
+        )
         
         # Al instanciarse, el prestamo esta activo
         self._fecha_devolucion_real = None
@@ -799,7 +805,7 @@ class Prestamo:
         
         # Aquí verificamos si se entregó tarde
         entregado_tarde = self._fecha_devolucion_real > self._fecha_devolucion_prevista
-        if entregado_tarde and self._usuario.sancionado is False: 
+        if entregado_tarde and isinstance(self._usuario, Socio) and self._usuario.sancionado is False: 
             self._usuario.cambiar_sancionar() # Sancionamos al usuario por entregar tarde
             
         self._estado = EstadoPrestamo.DEVUELTO
