@@ -681,8 +681,12 @@ class Empleado(Usuario):
 
 
 class Prestamo:
-    def __init__(self, id_prestamo: str, usuario, material, dias_prestamo: int = 15):
-        # Validaciones de los IDs o objetos
+    def __init__(self,
+                 id_prestamo: str,
+                 usuario: Usuario,
+                 material: Material,
+                 dias_prestamo: int = None):
+        # Validaciones de los ID
         if not id_prestamo or type(id_prestamo) != str:
             raise ValueError("El ID del préstamo debe ser un texto válido.")
         
@@ -691,52 +695,66 @@ class Prestamo:
         self._usuario = usuario
         self._material = material
         
-        # Fechas calculadas automáticamente
+        # Fecha de prestamo se asigna en funcion de la configurada para cada tipo de material, o la por defecto si no se especifica.
         self._fecha_prestamo = datetime.now() # Fecha y hora actual exacta
-        
+        if dias_prestamo is None:
+            if type(material) == Dispositivo:
+                dias_prestamo = ConfiguracionBiblioteca.TIEMPO_PRESTAMO_DISPOSITIVOS
+            elif type(material) == JuegoDeMesa:
+                dias_prestamo = ConfiguracionBiblioteca.TIEMPO_PRESTAMO_JUEGOS_MESA
+            else:
+                dias_prestamo = ConfiguracionBiblioteca.TIEMPO_PRESTAMO_DEFECTO
+
         # Calculamos la fecha de devolución sumando los días (timedelta)
         if type(dias_prestamo) != int or dias_prestamo <= 0:
             raise ValueError("Los días de préstamo deben ser un número entero positivo.")
             
         self._fecha_devolucion_prevista = self._fecha_prestamo + timedelta(days=dias_prestamo)
         
-        # Al nacer, el préstamo no se ha devuelto y está activo
+        # Al instanciarse, el prestamo esta activo
         self._fecha_devolucion_real = None
         self._estado = EstadoPrestamo.ACTIVO
 
     # ==========================================
-    # GETTERS (Solo lectura, sin setters para proteger el contrato)
+    # GETTERS (Solo lectura, sin setters ya que tienen que ser inmutables después de crear el préstamo)
     # ==========================================
     @property
-    def id_prestamo(self): return self._id_prestamo
+    def id_prestamo(self):
+        return self._id_prestamo
 
     @property
-    def usuario(self): return self._usuario
+    def usuario(self):
+        return self._usuario
 
     @property
-    def material(self): return self._material
+    def material(self):
+        return self._material
 
     @property
-    def fecha_prestamo(self): return self._fecha_prestamo
+    def fecha_prestamo(self):
+        return self._fecha_prestamo
 
     @property
-    def fecha_devolucion_prevista(self): return self._fecha_devolucion_prevista
+    def fecha_devolucion_prevista(self):
+        return self._fecha_devolucion_prevista
 
     @property
-    def fecha_devolucion_real(self): return self._fecha_devolucion_real
+    def fecha_devolucion_real(self):
+        return self._fecha_devolucion_real
 
     @property
-    def estado(self): return self._estado
+    def estado(self):
+        return self._estado
 
-    # ==========================================
-    # MÉTODOS DE ACCIÓN (Reglas de Negocio)
-    # ==========================================
+    # MÉTODOS DE ACCIÓN 
     
-    def actualizar_estado(self):
+    def actualizar_estado(self) -> bool:
         """Verifica si la fecha actual superó la fecha prevista y marca como retrasado."""
         if self._estado == EstadoPrestamo.ACTIVO:
             if datetime.now() > self._fecha_devolucion_prevista:
                 self._estado = EstadoPrestamo.RETRASADO
+                return True
+        return False
 
     def finalizar_prestamo(self) -> bool:
         """Registra la devolución del material y cierra el préstamo."""
@@ -745,17 +763,15 @@ class Prestamo:
             
         self._fecha_devolucion_real = datetime.now()
         
-        # Aquí verificamos si se entregó tarde para avisar a la interfaz
+        # Aquí verificamos si se entregó tarde
         entregado_tarde = self._fecha_devolucion_real > self._fecha_devolucion_prevista
-        
+        if entregado_tarde and self._usuario.sancionado: 
+            self._usuario.cambiar_sancionar() # Sancionamos al usuario por entregar tarde
         self._estado = EstadoPrestamo.DEVUELTO
-        
-        # Si quisiéramos, desde aquí podríamos sancionar al usuario automáticamente
-        # si entregado_tarde es True.
         
         return True
 
-    def extender_prestamo(self, dias_extra: int = 7) -> bool:
+    def extender_prestamo(self, dias_extra: int) -> bool:
         """Permite renovar el préstamo si no está retrasado ni devuelto."""
         self.actualizar_estado() # Comprobamos cómo está hoy
         
@@ -769,362 +785,13 @@ class Prestamo:
         return True
 
     def resumen(self) -> str:
-        """Devuelve un texto bonito para la interfaz de Tkinter."""
+        """Devuelve un texto para la interfaz de Tkinter."""
         self.actualizar_estado() # Aseguramos que el estado esté al día al imprimir
         
-        # Formateamos las fechas para que los humanos las entiendan (DD/MM/YYYY)
+        # Formateamos las fechas en (DD/MM/YYYY)
         fecha_p = self._fecha_prestamo.strftime("%d/%m/%Y")
         fecha_d = self._fecha_devolucion_prevista.strftime("%d/%m/%Y")
         
         return (f"[{self._id_prestamo}] {self._material.titulo} prestado a "
                 f"{self._usuario.nombre} ({fecha_p} -> {fecha_d}) | Estado: {self._estado.value}")
 
-
-
-from datetime import datetime, timedelta
-
-
-# Creamos nuestro propio tipo de error para cuando el material no está disponible
-
-class MaterialNoDisponibleExcepcion(Exception):
-    """Error que usamos cuando alguien pide un material que no está disponible."""
-    def __init__(self, titulo):
-        super().__init__(f"'{titulo}' no está disponible.")
-
-
-
-def prestar(material, usuario, prestamos):
-    """
-    Función principal para hacer un préstamo.
-    Antes de hacerlo mira si el material está libre, si el usuario
-    puede pedir cosas y si no se ha pasado de su límite.
-    """
-
-    # Si el material no está disponible no sigue
-    if material.estado != EstadoMaterial.DISPONIBLE:
-        raise MaterialNoDisponibleExcepcion(material.titulo)
-
-    # Si el usuario tiene sanciones no puede pedir nada
-    if usuario.sancionado:
-        raise ValueError(f"'{usuario.nombre}' tiene sanciones activas.")
-
-    # Mira cuántos préstamos tiene abiertos este usuario
-    PrestamosActivos = [p for p in prestamos if p["usuario"] == usuario.nombre and p["activo"]]
-    if len(PrestamosActivos) >= usuario.limite_prestamos:
-        raise ValueError(
-            f"'{usuario.nombre}' ya tiene {usuario.limite_prestamos} préstamo(s) activo(s), que es su límite."
-        )
-
-    # Coge la fecha de hoy y le suma 15 días para saber cuándo tiene que devolver
-    hoy = datetime.now()
-    devolucion = hoy + timedelta(days=15)
-
-    # Se marca el material como prestado para que nadie más pueda pedirlo
-    material.estado = "Prestado"
-
-    # Guarda todos los datos del préstamo en un diccionario
-    NuevoPrestamo = {
-        "usuario": usuario.nombre,
-        "material": material.titulo,
-        "fecha_prestamo": hoy.strftime("%d/%m/%Y"),
-        "fecha_devolucion": devolucion.strftime("%d/%m/%Y"),
-        "activo": True
-    }
-
-    # Mete el préstamo en la lista general
-    prestamos.append(NuevoPrestamo)
-
-    print(f"Préstamo OK: '{material.titulo}' → '{usuario.nombre}'")
-    print(f"  Prestado:   {NuevoPrestamo['fecha_prestamo']}")
-    print(f"  Devolver:   {NuevoPrestamo['fecha_devolucion']}")
-
-    return NuevoPrestamo
-
-
-
-
-
-
-
-libro1 = Libro("L001", "El Quijote", "Miguel de Cervantes", 863, "978-3-16-148410-0", "Pasillo 4, Estante B", EstadoMaterial.NO_DISPONIBLE)
-dispositivo1 = Dispositivo("D001", "iPad Pro", TipoDispositivo.TABLET, ubicacion = "Mostrador Principal", fabricante="Apple", so="iOS")
-juego1 = JuegoDeMesa("J001", "Catan", "Devir", 3, 4, "Pasillo 2, Estante A")
-juego2 = JuegoDeMesa("J001", "Catan", "Devir", 4)
-juego3 = JuegoDeMesa("J001", "Catan", "Devir", max_jugadores = 3, ubicacion = "Pasillo 2, Estante A")
-recurso1 = RecursoDigital("R001", "Guía de Python", "    https://python.org", 5)
-
-empleado1 = Empleado("EM0001", "Paola", "Santana", "Paola.Santana@gmail.com")
-
-print(empleado1.descripcion_corta())
-print(empleado1.es_admin(), "admin")
-print(empleado1.es_bibliotecario_o_superior(), "admin o bibliotecario")
-empleado1.rol = RolEmpleado.ADMIN
-print(empleado1.es_admin(), "admin")
-print(empleado1.es_bibliotecario_o_superior(), "admin o bibliotecario")
-print(empleado1.descripcion_corta())
-empleado1.rol = RolEmpleado.BIBLIOTECARIO
-print(empleado1.es_admin(), "admin")
-print(empleado1.es_bibliotecario_o_superior(), "admin o bibliotecario")
-print(empleado1.descripcion_corta())
-empleado1.rol = RolEmpleado.AUXILIAR
-print(empleado1.descripcion_corta())
-print(empleado1.es_admin(), "admin")
-print(empleado1.es_bibliotecario_o_superior(), "admin o bibliotecario")
-print(empleado1.descripcion_corta())
-
-print(empleado1.descripcion_corta())
-
-print(empleado1.descripcion_corta())
-
-
-print(recurso1.url, "url recurso1")
-print(recurso1.descripcion_corta(), "inicio")
-recurso1.licencias_totales = 10
-print(recurso1.descripcion_corta(), "cambio licencias totales")
-recurso1.prestar()
-recurso1.prestar()
-print(recurso1.descripcion_corta(), "dos licencias prestadas")
-recurso1.prestar()
-recurso1.prestar()
-recurso1.prestar()
-recurso1.prestar()
-recurso1.prestar()
-recurso1.prestar()
-recurso1.prestar()
-recurso1.prestar()
-recurso1.prestar()
-print(recurso1.descripcion_corta(), "10 licencias prestadas")
-recurso1.devolver()
-recurso1.devolver()
-print(recurso1.descripcion_corta(), "devolucion de 2 licencias")
-# recurso1.retirar_licencias(3)
-# print(recurso1.descripcion_corta(), "retirada de 3 licencias")
-recurso1.retirar_licencias(2)
-print(recurso1.descripcion_corta(), "retirada de 2 licencias")
-recurso1.devolver()
-print(recurso1.descripcion_corta(), "devolucion de 1 licencia")
-recurso1.anadir_licencias(4)
-print(recurso1.descripcion_corta(), "añadir de 4 licencia")
-print(libro1.descripcion_corta())
-print(dispositivo1.descripcion_corta()) 
-print(juego1.descripcion_corta())
-print(juego2.descripcion_corta())
-print(juego3.descripcion_corta())
-print(recurso1.descripcion_corta())
-
-# print(dispositivo1.estado)
-# print(dispositivo1.tipo_dispositivo)
-
-
-# socio1 = Socio("S0001", "Paola", "Santana", "Paola.Santana@gmail.com" )
-# print(socio1.descripcion_corta())
-# socio1._prestamos_activos = 3
-# print(socio1.puede_prestar)
-# socio1.permitir_cambio_max()
-# print(socio1.descripcion_corta())
-# socio1.max_prestamos = 4
-# print(socio1.descripcion_corta())
-# socio1.puede_prestar
-# print(socio1.descripcion_corta())
-# socio1._prestamos_activos = 4
-# print(socio1.puede_prestar)
-# socio1.sancionar()
-# print(socio1.descripcion_corta())
-# print(socio1.puede_prestar)
-
-
-# print(libro1.__dict__)
-
-
-
-""""
-    Mirar de aqui para cuando se muestre por pantalla.
-
-    @property   # Por ver como hacer para cuando este pendiente de recogida, para que el bibliotecario 
-    def ubicacion(self) -> str: # pueda ver ubicacion pero no el usuario que veria "recoger en mostrador".     
-        if self._estado == EstadoMaterial.NO_DISPONIBLE:
-            return "Ubicación no disponible"
-        if self._estado == EstadoMaterial.PRESTADO:
-            return "En préstamo"
-        return self._ubicacion if self._ubicacion else "Ubicación no disponible"
-
-
-
-
-
-"""
-
-
-
-
-# class Libro(Material):
-#     """
-#     Clase que representa un libro.
-
-#     Hereda de Material porque un libro ES un material.
-#     """
-
-#     def __init__(self, codigo, titulo, autor, paginas, disponible=True):
-#         """
-#         Constructor de Libro.
-
-#         Usa super() para reutilizar el constructor de Material.
-#         """
-
-#         super().__init__(codigo, titulo, )
-#         self.paginas = int(paginas)
-
-#     def descripcion_corta(self):
-#         """
-#         TODO 1
-
-#         Completa este método para que devuelva una descripción de un libro.
-
-#         Ejemplo esperado:
-
-#         [L001] El Quijote - Miguel de Cervantes · Libro de 863 páginas (disponible)
-#         """
-#         if self.disponible:
-#             estado = "disponible"
-#         else:
-#             estado = "prestado"
-
-#         return f"[{self.codigo}] {self.titulo}  - {self.autor} · Libro de {self.paginas} páginas ({estado})"
-
-
-# class RecursoDigital(Material):
-#     """
-#     Clase que representa un recurso digital.
-
-#     Hereda de Material porque un recurso digital ES un material.
-#     """
-
-#     def __init__(self, codigo, titulo, autor, url, disponible=True):
-#         """
-#         Constructor de RecursoDigital.
-#         """
-
-#         super().__init__(codigo, titulo, autor, disponible)
-#         self.url = url
-
-#     def descripcion_corta(self):
-#         """
-#         Devuelve una descripción de un recurso digital.
-#         """
-
-#         if self.disponible:
-#             estado = "disponible"
-#         else:
-#             estado = "prestado"
-
-#         return f"[{self.codigo}] {self.titulo} - {self.autor} · Recurso digital ({estado})"
-
-
-# class Usuario:
-#     """
-#     Clase base para usuarios del sistema.
-#     """
-
-#     def __init__(self, identificador, nombre):
-#         """
-#         Constructor de Usuario.
-#         """
-
-#         self.identificador = identificador
-#         self.nombre = nombre
-
-#     def descripcion_corta(self):
-#         """
-#         Devuelve una descripción sencilla.
-#         """
-
-#         return f"[{self.identificador}] {self.nombre}"
-
-
-# class Socio(Usuario):
-#     """
-#     Clase que representa un socio de la biblioteca.
-
-#     Hereda de Usuario porque un socio ES un usuario.
-#     """
-
-#     def __init__(self, identificador, nombre, sancionado=False, max_prestamos=3):
-#         """
-#         Constructor de Socio.
-#         """
-
-#         super().__init__(identificador, nombre)
-
-#         self.sancionado = bool(sancionado)
-#         self.max_prestamos = int(max_prestamos)
-
-#     def puede_prestar(self, numero_prestamos_activos):
-#         """
-#         TODO 2
-
-#         Completa este método.
-
-#         Reglas:
-#         - Si el socio está sancionado, devuelve False.
-#         - Si numero_prestamos_activos es mayor o igual que max_prestamos, devuelve False.
-#         - En caso contrario, devuelve True.
-#         """
-#         if numero_prestamos_activos >= 3 or self.sancionado == True:
-#             return False
-#         else:
-#             return True
-  
-
-#     def descripcion_corta(self):
-#         """
-#         Devuelve una descripción del socio.
-#         """
-
-#         if self.sancionado:
-#             estado = "sancionado"
-#         else:
-#             estado = "activo"
-
-#         return f"[{self.identificador}] {self.nombre} · Socio {estado}"
-
-
-# class Prestamo:
-#     """
-#     Clase que representa un préstamo.
-
-#     Esta clase muestra una asociación:
-#     - tiene un socio;
-#     - tiene un material.
-
-#     No hereda de Socio ni de Material.
-#     """
-
-#     def __init__(self, id_prestamo, socio, material, fecha_prestamo, fecha_devolucion=None):
-#         """
-#         Constructor de Prestamo.
-#         """
-
-#         self.id_prestamo = id_prestamo
-#         self.socio = socio
-#         self.material = material
-#         self.fecha_prestamo = fecha_prestamo
-#         self.fecha_devolucion = fecha_devolucion
-
-#     def esta_activo(self):
-#         """
-#         Devuelve True si el préstamo sigue activo.
-#         """
-
-#         return self.fecha_devolucion is None
-
-#     def resumen(self):
-#         """
-#         Devuelve una frase resumen.
-#         """
-
-#         if self.esta_activo():
-#             estado = "activo"
-#         else:
-#             estado = f"devuelto el {self.fecha_devolucion}"
-
-#         return f"Préstamo {self.id_prestamo}: {self.socio.nombre} tiene '{self.material.titulo}' ({estado})"
