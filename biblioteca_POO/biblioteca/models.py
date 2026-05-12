@@ -279,6 +279,86 @@ class Libro(MaterialFisico):
             f"[{self.codigo_id}] Libro: '{self.titulo}' - Autor: {autor_str} - "
             f"Pags: {paginas_str} - ISBN: {isbn_str} - Estado: {self.estado.value}"
         )
+    
+
+class Revista(MaterialFisico):
+    """Clase para revistas y publicaciones periódicas."""
+    def __init__(
+        self, 
+        codigo_id: str, 
+        titulo: str, 
+        editorial: str = None, 
+        numero_edicion: int = None, 
+        issn: str = None, 
+        ubicacion: str = None, 
+        estado: EstadoMaterial = EstadoMaterial.DISPONIBLE
+    ):
+        super().__init__(codigo_id, titulo, ubicacion=ubicacion, estado=estado)
+        self.editorial = editorial
+        self.numero_edicion = numero_edicion
+        self.issn = issn
+    
+    @property
+    def editorial(self) -> str:
+        """Devuelve la editorial responsable de la revista."""
+        return self._editorial
+    
+    @editorial.setter
+    def editorial(self, nueva_editorial: str):
+        """Establece la editorial, asegurando el formato correcto."""
+        if nueva_editorial != None:
+            if type(nueva_editorial) != str:
+                raise ValueError("Formato no válido.")
+            
+            self._editorial = nueva_editorial.strip()
+        else:
+            self._editorial = None
+            
+    @property
+    def numero_edicion(self) -> int:
+        """Devuelve el número de edición de la revista."""
+        return self._numero_edicion
+    
+    @numero_edicion.setter
+    def numero_edicion(self, nueva_edicion: int):
+        """Establece el número de edición asegurando que sea un valor lógico."""
+        if nueva_edicion != None:
+            if type(nueva_edicion) != int:
+                raise ValueError("Formato no válido.")
+            
+            if nueva_edicion <= 0:
+                raise ValueError("El número de edición debe ser un entero positivo.")
+            
+            self._numero_edicion = nueva_edicion
+        else:
+            self._numero_edicion = None
+
+    @property
+    def issn(self) -> str:
+        """Devuelve el identificador comercial de publicaciones seriadas (ISSN)."""
+        return self._issn
+    
+    @issn.setter
+    def issn(self, nuevo_issn: str):
+        """Establece el ISSN de la revista."""
+        if nuevo_issn != None:
+            if type(nuevo_issn) != str:
+                raise ValueError("Formato no válido.")
+            
+            self._issn = nuevo_issn.strip()
+        else:
+            self._issn = None
+
+    def descripcion_corta(self) -> str:
+        """Retorna una cadena con la información clave de la revista para listados."""
+        editorial_str = self._editorial if self._editorial else "desconocida"
+        edicion_str = f"{self._numero_edicion}" if self._numero_edicion else "desconocida"
+        issn_str = self._issn if self._issn else "no disponible"
+        
+        return (
+            f"[{self.codigo_id}] Revista: '{self.titulo}' - Editorial: {editorial_str} - "
+            f"Edición: {edicion_str} - ISSN: {issn_str} - Estado: {self.estado.value}"
+        )
 
 
 class Dispositivo(MaterialFisico):  
