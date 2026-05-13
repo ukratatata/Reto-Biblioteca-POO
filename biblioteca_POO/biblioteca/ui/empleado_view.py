@@ -130,39 +130,59 @@ class VentanaEmpleado(tk.Toplevel):
 
         tk.Label(
             tab,
-            text="El socio debe presentarse en el mostrador con su ID de reserva.",
+            text="Doble clic sobre una reserva para formalizarla o cancelarla directamente.",
             font=F.PEQUEÑO, bg=C.FONDO_PRINCIPAL, fg=C.TEXTO_DESACTIVADO
-        ).pack(anchor="w", padx=16, pady=(0, 8))
+        ).pack(anchor="w", padx=16, pady=(0, 6))
+
+        # Barra de búsqueda por socio o material
+        barra = tk.Frame(tab, bg=C.FONDO_PRINCIPAL)
+        barra.pack(fill="x", padx=16, pady=(0, 8))
+
+        self._res_busqueda = tk.Entry(
+            barra, font=F.CUERPO, bg=C.FONDO_WIDGET, fg=C.TEXTO_PRINCIPAL,
+            insertbackground=C.ACENTO, relief="flat", bd=8
+        )
+        self._res_busqueda.insert(0, "Buscar por socio o material...")
+        self._res_busqueda.config(fg=C.TEXTO_DESACTIVADO)
+        self._res_busqueda.bind("<FocusIn>",   lambda e: self._placeholder_in(self._res_busqueda, "Buscar por socio o material..."))
+        self._res_busqueda.bind("<FocusOut>",  lambda e: self._placeholder_out(self._res_busqueda, "Buscar por socio o material..."))
+        self._res_busqueda.bind("<KeyRelease>", lambda e: self._filtrar_reservas())
+        self._res_busqueda.pack(side="left", fill="x", expand=True, padx=(0, 12))
+        BotonGhost(barra, "✕ Limpiar", lambda: (self._res_busqueda.delete(0, tk.END), self._res_busqueda.insert(0, "Buscar por socio o material..."), self._res_busqueda.config(fg=C.TEXTO_DESACTIVADO), self._filtrar_reservas())).pack(side="left")
 
         cols = [
-            ("id_res",   "ID Reserva", 120, "w"),
-            ("socio",    "Socio",      200, "w"),
-            ("material", "Material",   260, "w"),
-            ("limite",   "Límite recogida", 160, "center"),
-            ("estado",   "Estado",     120, "center"),
+            ("id_res",   "ID Reserva",     120, "w"),
+            ("socio",    "Socio",          200, "w"),
+            ("material", "Material",       260, "w"),
+            ("limite",   "Límite recogida",160, "center"),
+            ("estado",   "Estado",         120, "center"),
         ]
-        self._tabla_reservas = TablaDatos(tab, cols, altura_filas=16)
+        self._tabla_reservas = TablaDatos(tab, cols, altura_filas=14)
         self._tabla_reservas.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+        # Doble clic: rellena el campo y ofrece opciones rápidas
+        self._tabla_reservas.bind_doble_click(self._al_doble_click_reserva)
 
-        # Panel inferior: campo ID reserva + botón formalizar
-        pie = tk.Frame(tab, bg=C.FONDO_PANEL, padx=16, pady=12)
+        # Panel inferior compacto
+        pie = tk.Frame(tab, bg=C.FONDO_PANEL, padx=16, pady=10)
         pie.pack(fill="x", padx=16, pady=(0, 16))
 
-        tk.Label(
-            pie, text="ID de la reserva a formalizar:",
-            font=F.CUERPO, bg=C.FONDO_PANEL, fg=C.TEXTO_SECUNDARIO
-        ).pack(side="left", padx=(0, 8))
+        tk.Label(pie, text="ID Reserva:", font=F.CUERPO,
+                bg=C.FONDO_PANEL, fg=C.TEXTO_SECUNDARIO).pack(side="left", padx=(0, 6))
 
         self._campo_id_reserva = tk.Entry(
             pie, font=F.MONO, bg=C.FONDO_WIDGET, fg=C.ACENTO,
-            insertbackground=C.ACENTO, relief="flat", bd=6, width=22
+            insertbackground=C.ACENTO, relief="flat", bd=6, width=20
         )
-        self._campo_id_reserva.pack(side="left", padx=(0, 12))
+        self._campo_id_reserva.pack(side="left", padx=(0, 10))
 
-        BotonPrimario(pie, "✓  Formalizar recogida", self._formalizar_recogida).pack(side="left")
+        BotonPrimario(pie, "✓ Formalizar", self._formalizar_recogida).pack(side="left", padx=(0, 6))
+        BotonPeligro(pie, "✕ Cancelar reserva", self._cancelar_reserva).pack(side="left")
 
         self._estado_reservas = EtiquetaEstado(tab)
         self._estado_reservas.pack(pady=(0, 8))
+
+        # Caché para el filtro local
+        self._reservas_cache = []
 
         return tab
 
@@ -194,6 +214,74 @@ class VentanaEmpleado(tk.Toplevel):
             self._cargar_prestamos_activos()
         else:
             self._estado_reservas.error(msg)
+
+    def _cargar_reservas(self):
+        reservas = self._ctrl.obtener_reservas_activas()
+        self._reservas_cache = reservas
+        self._renderizar_reservas(reservas)
+
+    def _filtrar_reservas(self):
+        """Filtra la caché local de reservas por socio o material."""
+        texto = self._res_busqueda.get().lower()
+        placeholder = "buscar por socio o material..."
+        if not texto or texto == placeholder:
+            self._renderizar_reservas(self._reservas_cache)
+            return
+        filtradas = [
+            r for r in self._reservas_cache
+            if texto in r.usuario.nombre.lower()
+            or texto in r.usuario.apellidos.lower()
+            or texto in r.usuario.id_usuario.lower()
+            or texto in r.material.titulo.lower()
+        ]
+        self._renderizar_reservas(filtradas)
+
+    def _renderizar_reservas(self, reservas: list):
+        filas = []
+        for r in reservas:
+            tag = "expirado" if r.ha_expirado() else ""
+            filas.append(((
+                r.id_reserva,
+                f"{r.usuario.nombre} {r.usuario.apellidos} [{r.usuario.id_usuario}]",
+                r.material.titulo,
+                r.fecha_limite_recogida.strftime("%d/%m/%Y %H:%M"),
+                r.estado.value
+            ), tag))
+        self._tabla_reservas.cargar_con_tags(filas)
+
+    def _al_doble_click_reserva(self, fila):
+        """Al hacer doble clic rellena el campo ID y pregunta qué hacer."""
+        if not fila:
+            return
+        id_res = fila[0]
+        self._campo_id_reserva.delete(0, tk.END)
+        self._campo_id_reserva.insert(0, id_res)
+
+    def _cancelar_reserva(self):
+        """Cancela una reserva activa liberando el material y el cupo del socio."""
+        id_res = self._campo_id_reserva.get().strip()
+        if not id_res:
+            self._estado_reservas.error("Introduce o selecciona el ID de la reserva.")
+            return
+
+        reserva = self._ctrl.repo.obtener_reserva(id_res.upper())
+        if not reserva:
+            self._estado_reservas.error("Reserva no encontrada.")
+            return
+
+        if not confirmar(
+            "Cancelar reserva",
+            f"¿Cancelar la reserva '{id_res}' de '{reserva.material.titulo}' "
+            f"para {reserva.usuario.nombre} {reserva.usuario.apellidos}?\n\n"
+            f"El material volverá a estar disponible y se liberará el cupo del socio."
+        ):
+            return
+
+        # Reutilizamos _expirar_reserva del controlador — mismo efecto que cancelar
+        self._ctrl._expirar_reserva(reserva)
+        self._estado_reservas.exito(f"Reserva '{id_res}' cancelada. Material liberado.")
+        self._campo_id_reserva.delete(0, tk.END)
+        self._cargar_reservas()
 
     # ==========================================
     # TAB: PRÉSTAMOS ACTIVOS (Auxiliar+)
@@ -257,6 +345,7 @@ class VentanaEmpleado(tk.Toplevel):
         ]
         self._tabla_prestamos = TablaDatos(tab, cols, altura_filas=14)
         self._tabla_prestamos.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+        self._tabla_prestamos.bind_doble_click(self._al_doble_click_prestamo)
 
         # Panel inferior: devolver
         pie = tk.Frame(tab, bg=C.FONDO_PANEL, padx=16, pady=12)
@@ -295,6 +384,14 @@ class VentanaEmpleado(tk.Toplevel):
                 p.estado.value
             ), tag))
         self._tabla_prestamos.cargar_con_tags(filas)
+        self._tabla_prestamos.bind_doble_click(self._al_doble_click_prestamo)
+
+    def _al_doble_click_prestamo(self, fila):
+        """Al hacer doble clic en un préstamo rellena el campo ID de devolución."""
+        if not fila:
+            return
+        self._campo_id_prestamo.delete(0, tk.END)
+        self._campo_id_prestamo.insert(0, fila[0])
 
     def _registrar_devolucion(self):
         id_p = self._campo_id_prestamo.get().strip()
@@ -491,9 +588,11 @@ class VentanaEmpleado(tk.Toplevel):
         pie = tk.Frame(tab, bg=C.FONDO_PANEL, padx=16, pady=10)
         pie.pack(fill="x", padx=16, pady=(0, 16))
 
-        BotonSecundario(pie, "↺  Refrescar", self._cargar_socios).pack(side="left", padx=(0, 8))
-        BotonSecundario(pie, "📄  Ver detalle", lambda: self._abrir_detalle_socio(self._tabla_socios.seleccion())).pack(side="left", padx=(0, 8))
-        BotonPeligro(pie, "⚖  Cambiar sanción", self._cambiar_sancion_socio).pack(side="left")
+        BotonPrimario(pie, "+ Nuevo socio", self._abrir_formulario_socio).pack(side="left", padx=(0, 8))
+        BotonSecundario(pie, "✏ Editar", lambda: self._abrir_formulario_socio(self._tabla_socios.seleccion())).pack(side="left", padx=(0, 8))
+        BotonSecundario(pie, "📄 Ver detalle", lambda: self._abrir_detalle_socio(self._tabla_socios.seleccion())).pack(side="left", padx=(0, 8))
+        BotonPeligro(pie, "🗑 Eliminar", self._eliminar_socio).pack(side="left", padx=(0, 8))
+        BotonPeligro(pie, "⚖ Cambiar sanción", self._cambiar_sancion_socio).pack(side="left")
 
         self._estado_socios = EtiquetaEstado(tab)
         self._estado_socios.pack(pady=(0, 8))
@@ -557,6 +656,32 @@ class VentanaEmpleado(tk.Toplevel):
             return
 
         exito, msg = self._ctrl.cambiar_sancion_socio(id_s)
+        if exito:
+            self._estado_socios.exito(msg)
+            self._cargar_socios()
+        else:
+            self._estado_socios.error(msg)
+
+    def _abrir_formulario_socio(self, fila=None):
+        """Abre el formulario de creación o edición de socio."""
+        socio = None
+        if fila:
+            socio = self._ctrl.buscar_usuario(fila[0])
+            if not isinstance(socio, Socio):
+                socio = None
+        FormularioSocio(self, self._ctrl, socio, self._cargar_socios)
+
+    def _eliminar_socio(self):
+        fila = self._tabla_socios.seleccion()
+        if not fila:
+            self._estado_socios.error("Selecciona un socio primero.")
+            return
+
+        nombre = fila[1]
+        if not confirmar("Eliminar socio", f"¿Eliminar a '{nombre}' permanentemente?\nEsta acción no se puede deshacer."):
+            return
+
+        exito, msg = self._ctrl.eliminar_socio(fila[0])
         if exito:
             self._estado_socios.exito(msg)
             self._cargar_socios()
@@ -738,20 +863,11 @@ class VentanaEmpleado(tk.Toplevel):
             entry.config(fg=C.TEXTO_DESACTIVADO)
 
     def _al_cambiar_tab(self, event):
+        """Refresca los datos de la pestaña activa usando el mapa de loaders."""
         tab_idx = self._notebook.index("current")
-        # Refrescamos la pestaña activa con datos frescos de la BD
-        handlers = {
-            0: self._cargar_reservas,
-            1: self._cargar_prestamos_activos,
-        }
-        if self._empleado.es_bibliotecario_o_superior():
-            handlers[3] = self._cargar_catalogo
-            handlers[4] = self._cargar_socios
-        if self._empleado.es_admin():
-            handlers[5] = self._cargar_empleados
-
-        if tab_idx in handlers:
-            handlers[tab_idx]()
+        loader = self._tab_loaders.get(tab_idx)
+        if loader:
+            loader()
 
     def _logout(self):
         self._ctrl.detener_temporizador()
@@ -1289,6 +1405,111 @@ class VentanaDetalleSocio(tk.Toplevel):
         y = (self.winfo_screenheight() - alto)  // 2
         self.geometry(f"{ancho}x{alto}+{x}+{y}")
 
+# ==========================================
+# FORMULARIO: SOCIO (ventana auxiliar)
+# ==========================================
+
+class FormularioSocio(tk.Toplevel):
+    """Formulario modal para crear o editar un socio."""
+
+    def __init__(self, parent, controlador, socio: Socio = None, callback_ok: Callable = None):
+        super().__init__(parent)
+        self._ctrl    = controlador
+        self._socio   = socio
+        self._callback = callback_ok
+        self._modo    = "Editar socio" if socio else "Nuevo socio"
+
+        self.title(self._modo)
+        self.configure(bg=C.FONDO_PRINCIPAL)
+        self.resizable(False, False)
+        self.grab_set()
+        self._construir()
+        self._centrar()
+
+        if socio:
+            self._precargar()
+
+    def _construir(self):
+        contenido = tk.Frame(self, bg=C.FONDO_PRINCIPAL, padx=30, pady=24)
+        contenido.pack(fill="both", expand=True)
+
+        tk.Label(
+            contenido, text=self._modo,
+            font=F.TITULO_MEDIO, bg=C.FONDO_PRINCIPAL, fg=C.ACENTO
+        ).pack(anchor="w", pady=(0, 16))
+
+        if self._socio:
+            tk.Label(
+                contenido, text=f"ID: {self._socio.id_usuario}",
+                font=F.CUERPO, bg=C.FONDO_PRINCIPAL, fg=C.TEXTO_SECUNDARIO
+            ).pack(anchor="w", pady=(0, 12))
+        else:
+            id_preview = self._ctrl.siguiente_id_socio()
+            tk.Label(
+                contenido, text=f"ID asignado automáticamente: {id_preview}",
+                font=F.CUERPO, bg=C.FONDO_PRINCIPAL, fg=C.TEXTO_SECUNDARIO
+            ).pack(anchor="w", pady=(0, 12))
+
+        self._f_nombre    = CampoTexto(contenido, "Nombre")
+        self._f_nombre.pack(fill="x", pady=(0, 8))
+        self._f_apellidos = CampoTexto(contenido, "Apellidos")
+        self._f_apellidos.pack(fill="x", pady=(0, 8))
+        self._f_email     = CampoTexto(contenido, "Email")
+        self._f_email.pack(fill="x", pady=(0, 8))
+
+        if not self._socio:
+            # Solo pedimos contraseña al crear; para cambiarla está Mi Cuenta
+            self._f_pass = CampoTexto(contenido, "Contraseña inicial", password=True)
+            self._f_pass.pack(fill="x", pady=(0, 8))
+
+        Separador(contenido).pack(fill="x", pady=(8, 16))
+
+        fila_btns = tk.Frame(contenido, bg=C.FONDO_PRINCIPAL)
+        fila_btns.pack(fill="x")
+        BotonPrimario(fila_btns, "Guardar", self._guardar).pack(side="left", padx=(0, 8))
+        BotonGhost(fila_btns, "Cancelar", self.destroy).pack(side="left")
+
+        self._estado = EtiquetaEstado(contenido)
+        self._estado.pack(anchor="w", pady=(10, 0))
+
+    def _precargar(self):
+        self._f_nombre.set(self._socio.nombre)
+        self._f_apellidos.set(self._socio.apellidos)
+        self._f_email.set(self._socio.email)
+
+    def _guardar(self):
+        nombre    = self._f_nombre.get().strip()
+        apellidos = self._f_apellidos.get().strip()
+        email     = self._f_email.get().strip()
+
+        if not all([nombre, apellidos, email]):
+            self._estado.error("Nombre, apellidos y email son obligatorios.")
+            return
+
+        if self._socio:
+            exito, msg = self._ctrl.modificar_socio(
+                self._socio.id_usuario, nombre, apellidos, email
+            )
+        else:
+            pwd = self._f_pass.get()
+            if not pwd or len(pwd) < 6:
+                self._estado.error("La contraseña debe tener al menos 6 caracteres.")
+                return
+            exito, msg = self._ctrl.crear_socio(nombre, apellidos, email, pwd)
+
+        if exito:
+            if self._callback:
+                self._callback()
+            self.destroy()
+        else:
+            self._estado.error(msg)
+
+    def _centrar(self):
+        self.update_idletasks()
+        ancho, alto = 420, self.winfo_reqheight() + 40
+        x = (self.winfo_screenwidth()  - ancho) // 2
+        y = (self.winfo_screenheight() - alto)  // 2
+        self.geometry(f"{ancho}x{alto}+{x}+{y}")
 
 # ==========================================
 # SELECTORES DE BÚSQLÉDA (Socio / Material)

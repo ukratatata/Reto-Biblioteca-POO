@@ -271,10 +271,19 @@ class TablaDatos(tk.Frame):
         scroll_v.config(command=self._tree.yview)
         scroll_h.config(command=self._tree.xview)
 
-        # Configuramos cabeceras y anchos
+        # Configuramos cabeceras y anchos — con click para ordenar
         for col_id, col_texto, col_ancho, col_anchor in columnas:
-            self._tree.heading(col_id, text=col_texto, anchor="w")
+            self._tree.heading(
+                col_id,
+                text=col_texto,
+                anchor="w",
+                command=lambda c=col_id: self._ordenar_por(c)
+            )
             self._tree.column(col_id, width=col_ancho, anchor=col_anchor, minwidth=60)
+
+        # Rastreamos la columna y dirección del último orden aplicado
+        self._orden_col = None
+        self._orden_asc = True
 
         # Zebra striping: filas alternas con fondo ligeramente diferente
         self._tree.tag_configure("par",   background=C.FONDO_WIDGET)
@@ -283,6 +292,57 @@ class TablaDatos(tk.Frame):
         self._tree.tag_configure("expirado",  background="#3a3020", foreground=C.ADVERTENCIA)
 
         self._tree.pack(side="left", fill="both", expand=True)
+
+    def _ordenar_por(self, col_id: str):
+        """
+        Ordena las filas de la tabla por la columna pulsada.
+        Alterna ascendente/descendente si se pulsa la misma columna dos veces.
+        Muestra una flecha ↑↓ en la cabecera activa.
+        """
+        # Intentamos ordenar numéricamente primero; si falla, como texto
+        datos = [
+            (self._tree.set(item, col_id), item)
+            for item in self._tree.get_children("")
+        ]
+
+        def clave(par):
+            val = par[0]
+            try:
+                return (0, float(val.replace("/", "").replace("-", "")))
+            except ValueError:
+                return (1, val.lower())
+
+        # Alternamos dirección si se repite la misma columna
+        if self._orden_col == col_id:
+            self._orden_asc = not self._orden_asc
+        else:
+            self._orden_asc = True
+            self._orden_col = col_id
+
+        datos.sort(key=clave, reverse=not self._orden_asc)
+
+        for posicion, (_, item) in enumerate(datos):
+            self._tree.move(item, "", posicion)
+
+        # Actualizamos el zebra-striping tras reordenar
+        for i, item in enumerate(self._tree.get_children("")):
+            tags_actuales = list(self._tree.item(item, "tags"))
+            # Quitamos tags de zebra anteriores y ponemos el nuevo
+            tags_sin_zebra = [t for t in tags_actuales if t not in ("par", "impar")]
+            nuevo_tag = "par" if i % 2 == 0 else "impar"
+            # Conservamos tags semánticos (retrasado, expirado) si los hay
+            if tags_sin_zebra:
+                self._tree.item(item, tags=tags_sin_zebra)
+            else:
+                self._tree.item(item, tags=(nuevo_tag,))
+
+        # Marcamos la cabecera activa con una flecha
+        flecha = " ↑" if self._orden_asc else " ↓"
+        for col in self._tree["columns"]:
+            texto_actual = self._tree.heading(col, "text")
+            # Quitamos flecha previa si la había
+            texto_limpio = texto_actual.rstrip(" ↑↓")
+            self._tree.heading(col, text=texto_limpio + (flecha if col == col_id else ""))
 
     def cargar(self, filas: List[tuple]):
         """Limpia la tabla y carga una nueva lista de tuplas de datos."""

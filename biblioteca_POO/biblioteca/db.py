@@ -519,6 +519,17 @@ class BibliotecaRepository:
         return prestamo
     
 
+    def eliminar_usuario(self, id_usuario: str) -> bool:
+        """Borra un usuario del sistema de forma permanente."""
+        conexion = self._conectar()
+        cursor = conexion.cursor()
+        cursor.execute("DELETE FROM usuarios WHERE id_usuario = ?", (id_usuario,))
+        eliminado = cursor.rowcount > 0
+        conexion.commit()
+        conexion.close()
+        return eliminado
+
+
     def eliminar_material(self, codigo_id: str) -> bool:
         """
         Borra un material del catálogo de forma permanente.

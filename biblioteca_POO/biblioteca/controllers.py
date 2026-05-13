@@ -485,11 +485,29 @@ class BibliotecaController:
         """Devuelve el siguiente ID libre para un empleado, para mostrarlo en el formulario."""
         return self.repo.siguiente_id_empleado()
 
-    def cambiar_rol_empleado(
-        self,
-        id_usuario: str,
-        nuevo_rol: RolEmpleado
-    ) -> Tuple[bool, str]:
+    def modificar_socio(self, id_usuario, nombre, apellidos, email) -> Tuple[bool, str]:
+        usuario = self.repo.obtener_usuario(id_usuario)
+        if usuario is None or not isinstance(usuario, Socio):
+            return False, "Error: Socio no encontrado."
+        existente = self.repo.obtener_usuario_por_email(email)
+        if existente and existente.id_usuario != id_usuario:
+            return False, f"Error: El email '{email}' ya está registrado en otra cuenta."
+        usuario.nombre = nombre
+        usuario.apellidos = apellidos
+        usuario.email = email
+        self.repo.guardar_usuario(usuario)
+        return True, f"Socio '{id_usuario}' actualizado correctamente."
+
+    def eliminar_socio(self, id_usuario) -> Tuple[bool, str]:
+        usuario = self.repo.obtener_usuario(id_usuario)
+        if usuario is None or not isinstance(usuario, Socio):
+            return False, "Error: Socio no encontrado."
+        if usuario.prestamos_activos > 0:
+            return False, "Error: El socio tiene préstamos activos. Devuélvalos antes de eliminar la cuenta."
+        self.repo.eliminar_usuario(id_usuario)
+        return True, f"Socio '{id_usuario}' eliminado correctamente."
+
+    def cambiar_rol_empleado(self, id_usuario: str, nuevo_rol: RolEmpleado) -> Tuple[bool, str]:
         """Cambia el rol de un empleado. Solo accesible para administradores."""
         usuario = self.repo.obtener_usuario(id_usuario)
 
