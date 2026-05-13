@@ -400,14 +400,21 @@ class EtiquetaEstado(tk.Label):
     """
     Muestra mensajes de éxito, error o advertencia con color automático.
     Desaparece solo después de N segundos si se indica.
+    El fondo se hereda del padre automáticamente para no romper el layout.
     """
 
     def __init__(self, parent, **kwargs):
+        # Intentamos leer el fondo del padre para que el label encaje sin cuadrado visible
+        try:
+            bg_padre = parent.cget("bg")
+        except Exception:
+            bg_padre = C.FONDO_PANEL
+
         super().__init__(
             parent,
             text="",
             font=F.PEQUEÑO,
-            bg=C.FONDO_PANEL,
+            bg=bg_padre,
             fg=C.TEXTO_SECUNDARIO,
             **kwargs
         )

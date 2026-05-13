@@ -759,7 +759,7 @@ class Usuario(ABC):
         if not nuevo_email or not isinstance(nuevo_email, str):
             raise ValueError("El email no puede estar vacío.")
 
-        nuevo_email = nuevo_email.strip()
+        nuevo_email = nuevo_email.strip().lower()
         trozos = nuevo_email.split("@")
 
         if len(trozos) != 2 or "." not in trozos[1]:

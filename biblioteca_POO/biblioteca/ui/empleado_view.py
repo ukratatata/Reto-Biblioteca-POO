@@ -53,23 +53,35 @@ class VentanaEmpleado(tk.Toplevel):
         self._notebook = ttk.Notebook(self)
         self._notebook.pack(fill="both", expand=True, padx=16, pady=(0, 16))
 
+        # Mapeamos cada pestaña con su función de carga para no depender de índices fijos
+        self._tab_loaders = {}
+
         # Siempre disponibles para todos los empleados
         self._notebook.add(self._crear_tab_reservas(),  text="  📌  Reservas Pendientes  ")
+        self._tab_loaders[self._notebook.index("end") - 1] = self._cargar_reservas
+
         self._notebook.add(self._crear_tab_prestamos(), text="  📋  Préstamos Activos  ")
+        self._tab_loaders[self._notebook.index("end") - 1] = self._cargar_prestamos_activos
+
         self._notebook.add(self._crear_tab_cuenta(),    text="  👤  Mi Cuenta  ")
+        # Mi Cuenta no necesita carga de datos desde la BD
 
         # Bibliotecario y admin
         if self._empleado.es_bibliotecario_o_superior():
             self._notebook.add(self._crear_tab_catalogo(), text="  📚  Catálogo  ")
+            self._tab_loaders[self._notebook.index("end") - 1] = self._cargar_catalogo
+
             self._notebook.add(self._crear_tab_socios(),   text="  👥  Socios  ")
+            self._tab_loaders[self._notebook.index("end") - 1] = self._cargar_socios
 
         # Solo admin
         if self._empleado.es_admin():
             self._notebook.add(self._crear_tab_empleados(), text="  🔑  Empleados  ")
+            self._tab_loaders[self._notebook.index("end") - 1] = self._cargar_empleados
 
         self._notebook.bind("<<NotebookTabChanged>>", self._al_cambiar_tab)
 
-        # Carga inicial
+        # Carga inicial de las pestañas que arrancan visibles
         self._cargar_reservas()
         self._cargar_prestamos_activos()
 
@@ -796,19 +808,23 @@ class FormularioMaterial(tk.Toplevel):
             self._tipo_combo = ComboBox(contenido, "Tipo de material", TIPOS_MATERIAL)
             self._tipo_combo.set("Libro")
             self._tipo_combo.pack(fill="x", pady=(0, 10))
-            self._tipo_combo._combo.bind("<<ComboboxSelected>>", lambda e: self._actualizar_campos_extra())
 
-            # ID autogenerado: mostramos una preview que se actualiza con el tipo
+            # ID autogenerado: lo calculamos y guardamos al abrir el formulario
+            # y lo recalculamos solo si el usuario cambia el tipo
+            self._id_reservado = None
+
             self._lbl_id_preview = tk.Label(
                 contenido, text="",
                 font=F.CUERPO, bg=C.FONDO_PRINCIPAL, fg=C.TEXTO_SECUNDARIO
             )
             self._lbl_id_preview.pack(anchor="w", pady=(0, 8))
+
+            # Al cambiar el tipo recalculamos el ID reservado para ese tipo
             self._tipo_combo._combo.bind("<<ComboboxSelected>>", lambda e: (
                 self._actualizar_campos_extra(),
-                self._actualizar_id_preview()
-            ), add="+")
-            self._actualizar_id_preview()    # Preview inicial
+                self._reservar_id()
+            ))
+            self._reservar_id()    # Calculamos el ID inicial al abrir
         else:
             self._tipo_fijo = type(self._material).__name__
             tk.Label(
@@ -846,14 +862,18 @@ class FormularioMaterial(tk.Toplevel):
         self._estado = EtiquetaEstado(contenido)
         self._estado.pack(anchor="w", pady=(10, 0))
 
-    def _actualizar_id_preview(self):
-        """Refresca el label que muestra el ID que se va a asignar."""
+    def _reservar_id(self):
+        """
+        Calcula el siguiente ID para el tipo seleccionado, lo guarda en self._id_reservado
+        y actualiza el label de preview. Al llamarse una sola vez por tipo elegido,
+        garantizamos que el ID mostrado y el usado al guardar son siempre el mismo.
+        """
         tipo = self._tipo_combo.get()
         try:
-            nuevo_id = self._ctrl.siguiente_id_material(tipo)
-            self._lbl_id_preview.config(text=f"ID asignado automáticamente: {nuevo_id}")
+            self._id_reservado = self._ctrl.siguiente_id_material(tipo)
+            self._lbl_id_preview.config(text=f"ID asignado automáticamente: {self._id_reservado}")
         except Exception:
-            pass
+            self._id_reservado = None
 
     def _actualizar_campos_extra(self):
         """Destruye y recrea los campos específicos del tipo seleccionado."""
@@ -938,11 +958,14 @@ class FormularioMaterial(tk.Toplevel):
             self._estado.error("El título es obligatorio.")
             return
 
-        # En creación el ID es autogenerado; en edición conservamos el original
+        # En creación el ID fue calculado al abrir el formulario; en edición conservamos el original
         if self._material:
             codigo = self._material.codigo_id
         else:
-            codigo = self._ctrl.siguiente_id_material(tipo)
+            if not self._id_reservado:
+                self._estado.error("Error al generar el ID. Cierra y vuelve a abrir el formulario.")
+                return
+            codigo = self._id_reservado
 
         try:
             if tipo == "Libro":

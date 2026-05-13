@@ -74,9 +74,12 @@ class Aplicacion:
     def _al_hacer_logout(self):
         """
         Callback llamado cuando el usuario cierra sesión.
-        Reinicia el controlador (y su temporizador) y vuelve al login.
+        Detiene el temporizador del controlador actual antes de reemplazarlo,
+        y vuelve al login con un controlador limpio.
         """
-        # Reiniciamos el controlador para que el temporizador arranque limpio
+        # Paramos el temporizador del controlador que acaba de cerrar sesión
+        # antes de crear uno nuevo, para no acumular hilos daemon sueltos
+        self._ctrl.detener_temporizador()
         self._ctrl = BibliotecaController(self._repo)
         self._mostrar_login()
 

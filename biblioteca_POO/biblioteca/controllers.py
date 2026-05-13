@@ -90,8 +90,8 @@ class BibliotecaController:
         """
         if not id_usuario:
             return None
-            
-        return self.repo.obtener_usuario(id_usuario.strip())
+
+        return self.repo.obtener_usuario(id_usuario.strip().upper())
 
     def buscar_material(self, codigo_material: str) -> Material:
         """
@@ -100,8 +100,8 @@ class BibliotecaController:
         """
         if not codigo_material:
             return None
-            
-        return self.repo.obtener_material(codigo_material.strip())
+
+        return self.repo.obtener_material(codigo_material.strip().upper())
 
     # ==========================================
     # 2. OPERACIONES TRANSACCIONALES
@@ -182,7 +182,7 @@ class BibliotecaController:
             return False, "Error: Debe proporcionar un ID de préstamo válido."
             
         # 1. Recuperamos el préstamo (que por dentro ya trae a su Usuario y Material)
-        prestamo = self.repo.obtener_prestamo(id_prestamo.strip())
+        prestamo = self.repo.obtener_prestamo(id_prestamo.strip().upper())
         
         if prestamo is None:
             return False, "Error: No se ha encontrado el registro del préstamo."
@@ -293,7 +293,7 @@ class BibliotecaController:
         if not id_reserva:
             return False, "Error: Debe proporcionar un ID de reserva válido."
 
-        reserva = self.repo.obtener_reserva(id_reserva.strip())
+        reserva = self.repo.obtener_reserva(id_reserva.strip().upper())
 
         if reserva is None:
             return False, "Error: No se encontró ninguna reserva con ese ID."
