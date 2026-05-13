@@ -8,7 +8,7 @@ taller_gui_biblioteca/
 │   ├── db.py                 <- Gestión pura de SQLite
 │   ├── controllers.py        <- (C) El "Traductor" (Lógica de negocio)
 │   │
-│   └── ui/                   <- NUEVA CARPETA: Todo lo de Tkinter
+│   └── ui/                   <- (V) NUEVA CARPETA: Todo lo de Tkinter
 │       ├── __init__.py
 │       ├── app_window.py     <- La ventana principal (menús, tablas)
 │       └── forms.py          <- Ventanas secundarias (ej: "Añadir Socio")
