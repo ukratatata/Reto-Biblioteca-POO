@@ -25,6 +25,14 @@ taller_gui_biblioteca/
 
 
 
+ESTANDARES SEGUIDOS: 
+
+MVC (Model view controller)
+Single Table Inheritance (Herencia de Tabla Única).
+Patrón Repositorio (Repository Pattern) o DAO (Data Access Object)
+CLEAN CODE
+CQS (Command-query separation)
+UUIDs (Universally Unique Identifiers) 
 
 
     
