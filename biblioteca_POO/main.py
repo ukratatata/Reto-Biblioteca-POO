@@ -11,9 +11,9 @@ from biblioteca.controllers import BibliotecaController
 def probar_controlador():
     print("Iniciando el sistema de biblioteca...")
     
-    # 1. Conectamos la base de datos
-    repo = BibliotecaRepository("data/biblioteca.db")
-    
+    # Inicializamos el repositorio en la ruta definitiva
+    repo = BibliotecaRepository(ruta_db="data/biblioteca.db")
+
     # 2. Encendemos el "Cerebro" (Controlador)
     controlador = BibliotecaController(repo)
     

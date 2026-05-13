@@ -7,6 +7,7 @@ a tablas relacionales en SQLite, y de reconstruirlos de vuelta.
 """
 
 import sqlite3
+import os
 from datetime import datetime
 
 # Importamos usando la ruta absoluta desde la raíz del proyecto
@@ -25,7 +26,21 @@ class BibliotecaRepository:
     """
     
     def __init__(self, ruta_db: str = "biblioteca.db"):
-        self.ruta_db = ruta_db
+        """
+        Si recibe una ruta relativa, la convierte en absoluta basándose 
+        en la ubicación de este archivo.
+        """
+        if not os.path.isabs(ruta_db):
+            # 1. Obtenemos la carpeta donde está db.py (ej: .../biblioteca_POO/biblioteca/)
+            carpeta_actual = os.path.dirname(os.path.abspath(__file__))
+            
+            # 2. Subimos un nivel para llegar a la raíz (ej: .../biblioteca_POO/)
+            raiz_proyecto = os.path.dirname(carpeta_actual)
+            
+            # 3. Construimos la ruta final uniendo la raíz con lo que pida el usuario
+            self.ruta_db = os.path.join(raiz_proyecto, ruta_db)
+        else:
+            self.ruta_db = ruta_db
         self.crear_tablas()
 
     def _conectar(self) -> sqlite3.Connection:
