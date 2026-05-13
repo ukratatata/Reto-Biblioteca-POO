@@ -1,3 +1,6 @@
+# comprobar en db.py si guardar material, el hasattr sirve
+
+
 # in models.py:
 
 
@@ -64,6 +67,30 @@
 
 
 
+# revista1 = Revista(
+#     codigo_id="R001",
+#     titulo="National Geographic - Edición de Julio 2024",
+#     editorial="National Geographic Partners",
+#     numero_edicion=202407,
+#     issn="0027-9358",
+#     ubicacion="Estantería 3, Pasillo B"
+# )
+# socio1 = Socio(
+#     id_usuario="S001",
+#     nombre="Luis",
+#     apellidos="Gomez Ortega",
+#     email="joselu@maquina.com"
+# )
+# prestamo1 = Prestamo(
+#     id_prestamo="P001",
+#     usuario=socio1,
+#     material=revista1,
+#     dias_prestamo=7
+# )
+
+# print(revista1.descripcion_corta())
+# print(socio1.descripcion_corta())
+# print(prestamo1.resumen())
 
 # libro1 = Libro("L001", "El Quijote", "Miguel de Cervantes", 863, "978-3-16-148410-0", "Pasillo 4, Estante B", EstadoMaterial.NO_DISPONIBLE)
 # dispositivo1 = Dispositivo("D001", "iPad Pro", TipoDispositivo.TABLET, ubicacion = "Mostrador Principal", fabricante="Apple", so="iOS")
