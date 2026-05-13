@@ -26,7 +26,7 @@ def probar_controlador():
 
     # 4. Probamos a hacer un préstamo a nuestro Socio 1 (S-001)
     print("\nIntentando realizar un préstamo...")
-    exito, mensaje = controlador.realizar_prestamo(
+    exito, mensaje = libro.realizar_prestamo(
         id_usuario="S-001", 
         codigo_material="LIB-001"
     )
@@ -35,6 +35,8 @@ def probar_controlador():
         print(f"✅ {mensaje}")
     else:
         print(f"❌ {mensaje}")
+
+
 
 if __name__ == "__main__":
     probar_controlador()

@@ -12,9 +12,9 @@ from datetime import datetime
 
 # Importamos usando la ruta absoluta desde la raíz del proyecto
 from biblioteca.models import (
-    EstadoMaterial, EstadoPrestamo, TipoDispositivo, RolEmpleado,
+    EstadoMaterial, EstadoPrestamo, EstadoReserva, TipoDispositivo, RolEmpleado,
     Material, Libro, Revista, Dispositivo, JuegoDeMesa, RecursoDigital,
-    Usuario, Socio, Empleado, Prestamo
+    Usuario, Socio, Empleado, Prestamo, Reserva
 )
 
 
@@ -122,6 +122,21 @@ class BibliotecaRepository:
                 fecha_devolucion_real TEXT,
                 estado TEXT NOT NULL,
                 
+                FOREIGN KEY (id_usuario) REFERENCES usuarios (id_usuario),
+                FOREIGN KEY (codigo_material) REFERENCES materiales (codigo_id)
+            )
+        ''')
+
+        # TABLA RESERVAS (Registro de apartados pendientes de recogida)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reservas (
+                id_reserva TEXT PRIMARY KEY,
+                id_usuario TEXT NOT NULL,
+                codigo_material TEXT NOT NULL,
+                fecha_reserva TEXT NOT NULL,
+                fecha_limite_recogida TEXT NOT NULL,
+                estado TEXT NOT NULL,
+
                 FOREIGN KEY (id_usuario) REFERENCES usuarios (id_usuario),
                 FOREIGN KEY (codigo_material) REFERENCES materiales (codigo_id)
             )
@@ -342,14 +357,14 @@ class BibliotecaRepository:
         if fila is None:
             return None
             
-        # Añadimos nuestras nuevas variables al desempaquetado de la tupla
+        # Desempaquetamos siguiendo el orden exacto de columnas del CREATE TABLE
         (
             db_id, db_titulo, db_estado, db_tipo, db_ub, 
             db_autor, db_pag, db_isbn, 
             db_tipo_disp, db_fab, db_so, db_num_serie, 
             db_edit, db_min_jug, db_max_jug, 
-            db_url, db_lic_totales, db_lic_disp,
-            db_num_edicion, db_issn
+            db_num_edicion, db_issn,
+            db_url, db_lic_totales, db_lic_disp
         ) = fila
         
         estado_enum = EstadoMaterial(db_estado)
@@ -400,14 +415,16 @@ class BibliotecaRepository:
             )
             
         elif db_tipo == "RecursoDigital":
+            # Reconstruimos el digital pasando las licencias disponibles al constructor,
+            # que las acepta directamente como parámetro para no violar el encapsulamiento
             recurso = RecursoDigital(
                 codigo_id=db_id,
                 titulo=db_titulo,
                 url=db_url,
                 licencias_totales=db_lic_totales,
+                licencias_disponibles=db_lic_disp,
                 estado=estado_enum
             )
-            recurso._licencias_disponibles = db_lic_disp
             return recurso
             
         return None
@@ -442,10 +459,12 @@ class BibliotecaRepository:
             id_prestamo=db_id,
             usuario=usuario_obj,
             material=material_obj,
-            dias_prestamo=1 
+            dias_prestamo=1,
+            fecha_prestamo=datetime.fromisoformat(db_fecha_prest)  # Restauramos la fecha original
         )
         
-        prestamo._fecha_prestamo = datetime.fromisoformat(db_fecha_prest)
+        # Sobreescribimos la fecha de devolución prevista con la que tenía en BD
+        # (puede diferir si el préstamo fue extendido en alguna renovación)
         prestamo._fecha_devolucion_prevista = datetime.fromisoformat(db_fecha_prev)
         
         if db_fecha_real is not None:
@@ -458,74 +477,88 @@ class BibliotecaRepository:
         return prestamo
     
 
+    # ==========================================
+    # RESERVAS (Guardado y Recuperación)
+    # ==========================================
 
+    def guardar_reserva(self, reserva: Reserva):
+        """Inserta o actualiza una reserva en la tabla correspondiente."""
+        conexion = self._conectar()
+        cursor = conexion.cursor()
 
-# ==========================================
-# ZONA DE PRUEBAS (Script de ejecución directa)
-# ==========================================
+        consulta = '''
+            REPLACE INTO reservas (
+                id_reserva, id_usuario, codigo_material,
+                fecha_reserva, fecha_limite_recogida, estado
+            ) VALUES (?, ?, ?, ?, ?, ?)
+        '''
 
-if __name__ == "__main__":
-    import os
-    
-    print("Iniciando pruebas de la Base de Datos...")
-    
-    # 1. Creamos un archivo provisional solo para hacer pruebas
-    nombre_db_prueba = "biblioteca_prueba.db"
-    repositorio = BibliotecaRepository(ruta_db=nombre_db_prueba)
-    
-    # 2. Creamos algunos objetos de prueba usando tus modelos
-    print("Creando objetos de prueba en memoria...")
-    
-    socio_prueba = Socio(
-        id_usuario="U-001",
-        nombre="Elena",
-        apellidos="Gómez",
-        email="elena@email.com"
-    )
-    
-    libro_prueba = Libro(
-        codigo_id="L-001",
-        titulo="1984",
-        autor="George Orwell",
-        paginas=328,
-        isbn="978-0451524935",
-        ubicacion="Pasillo 3, Estante A"
-    )
-    
-    revista_prueba = Revista(
-        codigo_id="R-001",
-        titulo="National Geographic",
-        editorial="NatGeo Partners",
-        numero_edicion=150,
-        issn="0027-9358"
-    )
-    
-    # 3. Probamos el INSERT (Guardar en la base de datos)
-    print("Guardando objetos en SQLite...")
-    repositorio.guardar_usuario(socio_prueba)
-    repositorio.guardar_material(libro_prueba)
-    repositorio.guardar_material(revista_prueba)
-    
-    # 4. Probamos el SELECT (Recuperar de la base de datos)
-    print("Recuperando objetos desde SQLite...")
-    socio_recuperado = repositorio.obtener_usuario("U-001")
-    libro_recuperado = repositorio.obtener_material("L-001")
-    revista_recuperada = repositorio.obtener_material("R-001")
-    
-    # 5. Mostramos los resultados para verificar que todo coincide
-    print("\n--- RESULTADOS DE LA RECUPERACIÓN ---")
-    
-    if socio_recuperado:
-        print("✅ Socio recuperado:")
-        print(socio_recuperado.descripcion_corta())
-    
-    if libro_recuperado:
-        print("✅ Libro recuperado:")
-        print(libro_recuperado.descripcion_corta())
-        
-    if revista_recuperada:
-        print("✅ Revista recuperada:")
-        print(revista_recuperada.descripcion_corta())
+        valores = (
+            reserva.id_reserva,
+            reserva.usuario.id_usuario,
+            reserva.material.codigo_id,
+            reserva.fecha_reserva.isoformat(),
+            reserva.fecha_limite_recogida.isoformat(),
+            reserva.estado.value
+        )
 
-    # Aviso final sobre el archivo generado
-    print(f"\n¡Prueba finalizada! Puedes abrir el archivo '{nombre_db_prueba}' con DB Browser for SQLite para ver las tablas por dentro.")
+        cursor.execute(consulta, valores)
+        conexion.commit()
+        conexion.close()
+
+    def obtener_reserva(self, id_reserva: str) -> Reserva:
+        """
+        Reconstruye una Reserva desde la BD, incluyendo sus objetos de Usuario y Material.
+        Devuelve None si no existe el registro.
+        """
+        conexion = self._conectar()
+        cursor = conexion.cursor()
+
+        cursor.execute("SELECT * FROM reservas WHERE id_reserva = ?", (id_reserva,))
+        fila = cursor.fetchone()
+        conexion.close()
+
+        if fila is None:
+            return None
+
+        (
+            db_id, db_id_usuario, db_id_material,
+            db_fecha_reserva, db_fecha_limite, db_estado
+        ) = fila
+
+        usuario_obj = self.obtener_usuario(db_id_usuario)
+        material_obj = self.obtener_material(db_id_material)
+
+        if not usuario_obj or not material_obj:
+            raise ValueError("Inconsistencia en BBDD: El usuario o material de la reserva no existe.")
+
+        reserva = Reserva(
+            id_reserva=db_id,
+            usuario=usuario_obj,
+            material=material_obj,
+            fecha_reserva=datetime.fromisoformat(db_fecha_reserva)
+        )
+
+        # Restauramos la fecha límite tal como estaba guardada (no la recalculamos)
+        reserva._fecha_limite_recogida = datetime.fromisoformat(db_fecha_limite)
+        reserva._estado = EstadoReserva(db_estado)
+
+        return reserva
+
+    def obtener_reservas_activas(self) -> list:
+        """
+        Devuelve todas las reservas que todavía están en estado ACTIVA.
+        El controlador las usará al arrancar para liberar las que hayan expirado.
+        """
+        conexion = self._conectar()
+        cursor = conexion.cursor()
+
+        cursor.execute(
+            "SELECT id_reserva FROM reservas WHERE estado = ?",
+            (EstadoReserva.ACTIVA.value,)
+        )
+        filas = cursor.fetchall()
+        conexion.close()
+
+        # Reconstruimos cada reserva completa usando obtener_reserva
+        return [self.obtener_reserva(fila[0]) for fila in filas]
