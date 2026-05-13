@@ -10,7 +10,7 @@ import uuid
 from typing import Tuple
 
 from biblioteca.models import Usuario, Material, Prestamo, Socio
-from biblioteca.database import BibliotecaRepository
+from biblioteca.db import BibliotecaRepository
 
 
 class BibliotecaController:
