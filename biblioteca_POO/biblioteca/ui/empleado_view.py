@@ -951,11 +951,17 @@ class FormularioMaterial(tk.Toplevel):
                 contenido, text=f"Código: {self._material.codigo_id}",
                 font=F.CUERPO, bg=C.FONDO_PRINCIPAL, fg=C.TEXTO_SECUNDARIO
             ).pack(anchor="w", pady=(0, 10))
+        
+        tk.Label(
+            contenido,
+            text="Los campos marcados con * son obligatorios",
+            font=F.PEQUEÑO, bg=C.FONDO_PRINCIPAL, fg=C.TEXTO_DESACTIVADO
+        ).pack(anchor="w", pady=(0, 12))
 
-        self._f_titulo  = CampoTexto(contenido, "Título")
+        self._f_titulo  = CampoTexto(contenido, "Título *")
         self._f_titulo.pack(fill="x", pady=(0, 8))
 
-        self._f_ubicacion = CampoTexto(contenido, "Ubicación (opcional)")
+        self._f_ubicacion = CampoTexto(contenido, "Ubicación")
         self._f_ubicacion.pack(fill="x", pady=(0, 8))
 
         Separador(contenido).pack(fill="x", pady=(4, 12))
@@ -1015,7 +1021,7 @@ class FormularioMaterial(tk.Toplevel):
             self._f_issn.pack(fill="x", pady=(0, 8))
 
         elif tipo == "Dispositivo":
-            self._f_tipo_disp  = ComboBox(self._zona_extra, "Tipo de dispositivo", TIPOS_DISP)
+            self._f_tipo_disp  = ComboBox(self._zona_extra, "Tipo de dispositivo *", TIPOS_DISP)
             self._f_tipo_disp.pack(fill="x", pady=(0, 8))
             self._f_fabricante = CampoTexto(self._zona_extra, "Fabricante")
             self._f_fabricante.pack(fill="x", pady=(0, 8))
@@ -1035,7 +1041,7 @@ class FormularioMaterial(tk.Toplevel):
         elif tipo == "RecursoDigital":
             self._f_url           = CampoTexto(self._zona_extra, "URL de acceso")
             self._f_url.pack(fill="x", pady=(0, 8))
-            self._f_licencias     = CampoNumero(self._zona_extra, "Licencias totales")
+            self._f_licencias     = CampoNumero(self._zona_extra, "Licencias totales *")
             self._f_licencias.pack(fill="x", pady=(0, 8))
 
     def _precargar(self, m):
@@ -1190,15 +1196,15 @@ class FormularioEmpleado(tk.Toplevel):
             font=F.CUERPO, bg=C.FONDO_PRINCIPAL, fg=C.TEXTO_SECUNDARIO
         ).pack(anchor="w", pady=(0, 12))
 
-        self._f_nombre   = CampoTexto(contenido, "Nombre")
+        self._f_nombre   = CampoTexto(contenido, "Nombre *")
         self._f_nombre.pack(fill="x", pady=(0, 8))
-        self._f_apellidos = CampoTexto(contenido, "Apellidos")
+        self._f_apellidos = CampoTexto(contenido, "Apellidos *")
         self._f_apellidos.pack(fill="x", pady=(0, 8))
-        self._f_email    = CampoTexto(contenido, "Email")
+        self._f_email    = CampoTexto(contenido, "Email *")
         self._f_email.pack(fill="x", pady=(0, 8))
-        self._f_pass     = CampoTexto(contenido, "Contraseña inicial", password=True)
+        self._f_pass     = CampoTexto(contenido, "Contraseña inicial *", password=True)
         self._f_pass.pack(fill="x", pady=(0, 8))
-        self._f_rol      = ComboBox(contenido, "Rol", ROLES_EMPLEADO)
+        self._f_rol      = ComboBox(contenido, "Rol *", ROLES_EMPLEADO)
         self._f_rol.set(RolEmpleado.AUXILIAR.value)
         self._f_rol.pack(fill="x", pady=(0, 16))
 
@@ -1450,17 +1456,25 @@ class FormularioSocio(tk.Toplevel):
                 font=F.CUERPO, bg=C.FONDO_PRINCIPAL, fg=C.TEXTO_SECUNDARIO
             ).pack(anchor="w", pady=(0, 12))
 
-        self._f_nombre    = CampoTexto(contenido, "Nombre")
+        tk.Label(
+            contenido,
+            text="Los campos marcados con * son obligatorios",
+            font=F.PEQUEÑO, bg=C.FONDO_PRINCIPAL, fg=C.TEXTO_DESACTIVADO
+        ).pack(anchor="w", pady=(0, 12))
+
+        self._f_nombre    = CampoTexto(contenido, "Nombre *")         # Obligatorios — con asterisco en el label
         self._f_nombre.pack(fill="x", pady=(0, 8))
-        self._f_apellidos = CampoTexto(contenido, "Apellidos")
+        self._f_apellidos = CampoTexto(contenido, "Apellidos *")
         self._f_apellidos.pack(fill="x", pady=(0, 8))
-        self._f_email     = CampoTexto(contenido, "Email")
+        self._f_email     = CampoTexto(contenido, "Email *")
         self._f_email.pack(fill="x", pady=(0, 8))
+
 
         if not self._socio:
             # Solo pedimos contraseña al crear; para cambiarla está Mi Cuenta
-            self._f_pass = CampoTexto(contenido, "Contraseña inicial", password=True)
+            self._f_pass = CampoTexto(contenido, "Contraseña inicial *", password=True)
             self._f_pass.pack(fill="x", pady=(0, 8))
+
 
         Separador(contenido).pack(fill="x", pady=(8, 16))
 

@@ -348,6 +348,9 @@ class TablaDatos(tk.Frame):
         """Limpia la tabla y carga una nueva lista de tuplas de datos."""
         self._tree.delete(*self._tree.get_children())
 
+        # Ordenamos por la primera columna (ID) por defecto al cargar
+        filas_ordenadas = sorted(filas, key=lambda f: str(f[0]).upper())
+
         for i, fila in enumerate(filas):
             tag = "par" if i % 2 == 0 else "impar"
             self._tree.insert("", "end", values=fila, tags=(tag,))
@@ -359,6 +362,9 @@ class TablaDatos(tk.Frame):
         """
         self._tree.delete(*self._tree.get_children())
 
+        # Ordenamos por la primera columna (ID) por defecto al cargar
+        filas_ordenadas = sorted(filas, key=lambda f: str(f[0][0]).upper())
+        
         for i, (datos, tag_extra) in enumerate(filas):
             tag_zebra = "par" if i % 2 == 0 else "impar"
             # El tag_extra sobreescribe el color zebra si es relevante
