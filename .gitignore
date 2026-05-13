@@ -1,0 +1,21 @@
+# Caché de Python — se regenera automáticamente al ejecutar
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Base de datos — cada instalación tiene la suya
+data/
+*.db
+
+# Configuración local del editor — no es parte del proyecto
+.vscode/
+
+# Entornos virtuales
+venv/
+.env/
+env/
+
+# PyInstaller (si generas un ejecutable)
+dist/
+build/
+*.spec
