@@ -652,6 +652,23 @@ class BibliotecaRepository:
 
         return [self.obtener_prestamo(pid) for pid in ids]
 
+    def obtener_todos_los_prestamos(self) -> list:
+        """
+        Devuelve todos los préstamos del sistema sin filtrar por estado,
+        incluyendo los ya devueltos. Útil para el historial completo del panel del auxiliar.
+        Ordenados por fecha de préstamo descendente (los más recientes primero).
+        """
+        conexion = self._conectar()
+        cursor = conexion.cursor()
+
+        cursor.execute(
+            "SELECT id_prestamo FROM prestamos ORDER BY fecha_prestamo DESC"
+        )
+        ids = [fila[0] for fila in cursor.fetchall()]
+        conexion.close()
+
+        return [self.obtener_prestamo(pid) for pid in ids]
+
     def obtener_reservas_de_usuario(self, id_usuario: str) -> list:
         """Devuelve todas las reservas (activas e históricas) de un socio concreto."""
         conexion = self._conectar()

@@ -21,7 +21,7 @@ class BibliotecaController:
     Controlador central del sistema.
     Expone las operaciones de alto nivel que la interfaz gráfica necesitará ejecutar.
     """
-    
+
     def __init__(self, repositorio: BibliotecaRepository, callback_expiracion: Callable = None):
         """
         callback_expiracion: función opcional que la UI puede pasar para recibir aviso
@@ -108,110 +108,92 @@ class BibliotecaController:
     # ==========================================
 
     def realizar_prestamo(
-        self, 
-        id_usuario: str, 
-        codigo_material: str, 
+        self,
+        id_usuario: str,
+        codigo_material: str,
         dias_prestamo: int = None
     ) -> Tuple[bool, str]:
         """
         Orquesta todo el proceso de prestar un material a un usuario.
         Comprueba las reglas de negocio, actualiza los estados y guarda en base de datos.
-        
+
         Retorna:
             - (True, "Mensaje de éxito") si todo salió bien.
             - (False, "Mensaje de error") si alguna regla de negocio lo impidió.
         """
-        # 1. Recuperamos los objetos vivos desde la base de datos
         usuario = self.buscar_usuario(id_usuario)
         material = self.buscar_material(codigo_material)
-        
-        # 2. Comprobaciones de seguridad básicas
+
         if usuario is None:
             return False, "Error: El usuario indicado no existe en el sistema."
-            
+
         if material is None:
             return False, "Error: El material indicado no existe en el catálogo."
-            
-        # 3. Aplicamos las Preguntas CQS de nuestros Modelos
+
         # Solo los Socios tienen la restricción de cupos y sanciones
         if isinstance(usuario, Socio):
             if not usuario.puede_prestar:
                 return False, "Error: El usuario ha superado su límite de préstamos o está sancionado."
-                
+
         if not material.puede_prestarse():
             return False, f"Error: El material '{material.titulo}' no está disponible para préstamo."
 
-        # 4. Si pasamos los controles, ejecutamos las Acciones CQS
         material.prestar()
-        
+
         if isinstance(usuario, Socio):
             usuario.incrementar_prestamos()
-            
+
         # Generamos un ID corto y seguro mediante un bucle anti-colisiones
         while True:
-            nuevo_id_prestamo = f"P-{uuid.uuid4().hex[:8].upper()}"     # Al ser prestamo, empieza por P
-            
-            # Comprobamos si este id ya existe en la base de datos
-            # (Si el repositorio nos devuelve None, significa que está libre)
+            nuevo_id_prestamo = f"P-{uuid.uuid4().hex[:8].upper()}"
             if self.repo.obtener_prestamo(nuevo_id_prestamo) is None:
-                break # ¡Está libre! Rompemos el bucle y seguimos
-        
+                break
+
         nuevo_prestamo = Prestamo(
             id_prestamo=nuevo_id_prestamo,
             usuario=usuario,
             material=material,
             dias_prestamo=dias_prestamo
         )
-        
-        # 5. Guardamos absolutamente todo en la base de datos para no perder coherencia
+
         self.repo.guardar_material(material)
         self.repo.guardar_usuario(usuario)
         self.repo.guardar_prestamo(nuevo_prestamo)
-        
+
         return True, f"¡Éxito! Préstamo '{nuevo_id_prestamo}' registrado correctamente."
 
-    def procesar_devolucion(
-        self, 
-        id_prestamo: str
-    ) -> Tuple[bool, str]:
+    def procesar_devolucion(self, id_prestamo: str) -> Tuple[bool, str]:
         """
         Registra el retorno de un material al catálogo, cierra el préstamo
         y libera el cupo del usuario, aplicando sanciones si corresponde.
         """
         if not id_prestamo:
             return False, "Error: Debe proporcionar un ID de préstamo válido."
-            
-        # 1. Recuperamos el préstamo (que por dentro ya trae a su Usuario y Material)
+
         prestamo = self.repo.obtener_prestamo(id_prestamo.strip().upper())
-        
+
         if prestamo is None:
             return False, "Error: No se ha encontrado el registro del préstamo."
-            
-        # 2. Comprobamos si ya estaba devuelto usando CQS
+
         if not prestamo.puede_finalizarse():
             return False, "Aviso: Este préstamo ya consta como devuelto en el sistema."
-            
-        # 3. Extraemos al usuario y al material implicados
+
         usuario = prestamo.usuario
         material = prestamo.material
-        
-        # 4. Ejecutamos las Acciones CQS
-        # Finalizar el préstamo comprueba automáticamente si hay retrasos y sanciona si es necesario
-        prestamo.finalizar_prestamo() 
+
+        prestamo.finalizar_prestamo()
         material.devolver()
-        
+
         if isinstance(usuario, Socio):
             usuario.reducir_prestamos()
-            
-        # 5. Guardamos todos los cambios sincronizados en SQLite
+
         self.repo.guardar_prestamo(prestamo)
         self.repo.guardar_material(material)
         self.repo.guardar_usuario(usuario)
-        
-        # Comprobamos si hubo sanción para avisar al bibliotecario por pantalla
+
         if isinstance(usuario, Socio) and usuario.sancionado:
             return True, "Devolución registrada. ATENCIÓN: El socio ha sido sancionado por retraso."
-            
+
         return True, "Devolución registrada correctamente. Material libre."
 
     # ==========================================
@@ -227,10 +209,6 @@ class BibliotecaController:
         Aparta un material físico para que el socio venga a recogerlo.
         El material queda bloqueado con estado PENDIENTE_RECOGIDA hasta que el socio llegue
         o hasta que expire el plazo configurado en ConfiguracionBiblioteca.
-
-        Retorna:
-            - (True, "Mensaje de éxito") si el apartado se creó correctamente.
-            - (False, "Mensaje de error") si algo lo impidió.
         """
         usuario = self.buscar_usuario(id_usuario)
         material = self.buscar_material(codigo_material)
@@ -241,8 +219,6 @@ class BibliotecaController:
         if material is None:
             return False, "Error: El material indicado no existe en el catálogo."
 
-        # Las reservas solo tienen sentido para materiales físicos;
-        # los recursos digitales no necesitan recogida presencial
         if not isinstance(material, MaterialFisico):
             return False, "Error: Las reservas solo aplican a materiales físicos."
 
@@ -255,11 +231,9 @@ class BibliotecaController:
         if not material.puede_reservarse():
             return False, f"Error: '{material.titulo}' no está disponible para reservar."
 
-        # Apartamos el material y contabilizamos el cupo del socio
         material.reservar_recogida()
         usuario.incrementar_prestamos()
 
-        # Generamos un ID único para la reserva con prefijo R (de Reserva)
         while True:
             nuevo_id_reserva = f"R-{uuid.uuid4().hex[:8].upper()}"
             if self.repo.obtener_reserva(nuevo_id_reserva) is None:
@@ -285,10 +259,6 @@ class BibliotecaController:
         """
         Formaliza la llegada del socio al mostrador para recoger su material apartado.
         Cierra la reserva y genera el Préstamo definitivo con su fecha de devolución.
-
-        Retorna:
-            - (True, "Mensaje de éxito") con el ID del préstamo creado.
-            - (False, "Mensaje de error") si el plazo expiró o la reserva no es válida.
         """
         if not id_reserva:
             return False, "Error: Debe proporcionar un ID de reserva válido."
@@ -298,9 +268,7 @@ class BibliotecaController:
         if reserva is None:
             return False, "Error: No se encontró ninguna reserva con ese ID."
 
-        # Comprobamos si el socio llegó dentro del plazo
         if not reserva.puede_recogerse():
-            # Si expiró en este preciso momento, lo gestionamos aquí mismo
             if reserva.ha_expirado():
                 self._expirar_reserva(reserva)
                 return False, "Error: El plazo de recogida ha expirado. El material ya está libre."
@@ -309,13 +277,9 @@ class BibliotecaController:
         usuario = reserva.usuario
         material = reserva.material
 
-        # Marcamos la reserva como completada y pasamos el material a PRESTADO
         reserva.marcar_recogida()
-        material.recoger()    # recoger() cambia de PENDIENTE_RECOGIDA a PRESTADO
+        material.recoger()
 
-        # El cupo ya estaba contabilizado al crear la reserva, así que no lo tocamos
-
-        # Generamos el ID del préstamo definitivo
         while True:
             nuevo_id_prestamo = f"P-{uuid.uuid4().hex[:8].upper()}"
             if self.repo.obtener_prestamo(nuevo_id_prestamo) is None:
@@ -354,16 +318,15 @@ class BibliotecaController:
         """
         Método interno que ejecuta la liberación de una reserva expirada.
         Restaura el material a DISPONIBLE y devuelve el cupo al socio sin sancionarlo.
-        No se llama directamente desde la interfaz; úsarlo desde el controlador.
         """
         usuario = reserva.usuario
         material = reserva.material
 
         reserva.expirar()
-        material.devolver()    # devolver() en MaterialFisico lo pone de vuelta a DISPONIBLE
+        material.devolver()
 
         if isinstance(usuario, Socio):
-            usuario.reducir_prestamos()    # Devolvemos el cupo sin penalizar
+            usuario.reducir_prestamos()
 
         self.repo.guardar_reserva(reserva)
         self.repo.guardar_material(material)
@@ -429,7 +392,6 @@ class BibliotecaController:
         """
         Registra un nuevo socio en el sistema con su contraseña inicial.
         El ID se genera automáticamente con el formato US-XXXX.
-        Comprueba que el email no esté ya en uso.
         """
         if self.repo.obtener_usuario_por_email(email):
             return False, f"Error: El email '{email}' ya está registrado."
@@ -458,7 +420,6 @@ class BibliotecaController:
         """
         Registra un nuevo empleado con ID automático formato UE-XXXX.
         Solo debe llamarse desde el panel de administrador.
-        Comprueba que el email no esté ya en uso.
         """
         if self.repo.obtener_usuario_por_email(email):
             return False, f"Error: El email '{email}' ya está registrado."
@@ -485,29 +446,97 @@ class BibliotecaController:
         """Devuelve el siguiente ID libre para un empleado, para mostrarlo en el formulario."""
         return self.repo.siguiente_id_empleado()
 
-    def modificar_socio(self, id_usuario, nombre, apellidos, email) -> Tuple[bool, str]:
+    def modificar_socio(
+        self,
+        id_usuario: str,
+        nombre: str,
+        apellidos: str,
+        email: str
+    ) -> Tuple[bool, str]:
+        """Actualiza los datos básicos de un socio existente."""
         usuario = self.repo.obtener_usuario(id_usuario)
         if usuario is None or not isinstance(usuario, Socio):
             return False, "Error: Socio no encontrado."
+
         existente = self.repo.obtener_usuario_por_email(email)
         if existente and existente.id_usuario != id_usuario:
             return False, f"Error: El email '{email}' ya está registrado en otra cuenta."
-        usuario.nombre = nombre
+
+        usuario.nombre    = nombre
         usuario.apellidos = apellidos
-        usuario.email = email
+        usuario.email     = email
         self.repo.guardar_usuario(usuario)
         return True, f"Socio '{id_usuario}' actualizado correctamente."
 
-    def eliminar_socio(self, id_usuario) -> Tuple[bool, str]:
+    def eliminar_socio(self, id_usuario: str) -> Tuple[bool, str]:
+        """
+        Elimina un socio del sistema de forma permanente.
+        Rechaza la operación si el socio tiene préstamos activos.
+        """
         usuario = self.repo.obtener_usuario(id_usuario)
         if usuario is None or not isinstance(usuario, Socio):
             return False, "Error: Socio no encontrado."
+
         if usuario.prestamos_activos > 0:
             return False, "Error: El socio tiene préstamos activos. Devuélvalos antes de eliminar la cuenta."
+
         self.repo.eliminar_usuario(id_usuario)
         return True, f"Socio '{id_usuario}' eliminado correctamente."
 
-    def cambiar_rol_empleado(self, id_usuario: str, nuevo_rol: RolEmpleado) -> Tuple[bool, str]:
+    def modificar_empleado(
+        self,
+        id_objetivo: str,
+        nombre: str,
+        apellidos: str,
+        email: str,
+        rol: RolEmpleado
+    ) -> Tuple[bool, str]:
+        """
+        Actualiza los datos de un empleado existente.
+        Solo accesible para administradores; no requiere contraseña actual.
+        Comprueba que el nuevo email no esté ya en uso por otra cuenta.
+        """
+        usuario = self.repo.obtener_usuario(id_objetivo)
+        if usuario is None or not isinstance(usuario, Empleado):
+            return False, "Error: Empleado no encontrado."
+
+        existente = self.repo.obtener_usuario_por_email(email)
+        if existente and existente.id_usuario != id_objetivo:
+            return False, f"Error: El email '{email}' ya está registrado en otra cuenta."
+
+        usuario.nombre    = nombre
+        usuario.apellidos = apellidos
+        usuario.email     = email
+        usuario.rol       = rol
+        self.repo.guardar_usuario(usuario)
+        return True, f"Empleado '{id_objetivo}' actualizado correctamente."
+
+    def resetear_password_admin(
+        self,
+        id_objetivo: str,
+        nueva_password: str
+    ) -> Tuple[bool, str]:
+        """
+        Permite a un administrador resetear la contraseña de cualquier usuario
+        sin necesitar conocer la contraseña actual.
+        La verificación de que quien llama es admin se hace en la UI.
+        """
+        usuario = self.repo.obtener_usuario(id_objetivo)
+        if usuario is None:
+            return False, "Error: El usuario no existe."
+
+        if len(nueva_password) < 6:
+            return False, "Error: La contraseña debe tener al menos 6 caracteres."
+
+        usuario.establecer_password(nueva_password)
+        self.repo.guardar_usuario(usuario)
+        return True, f"Contraseña de '{id_objetivo}' actualizada correctamente."
+
+    def cambiar_rol_empleado(
+        self,
+        id_usuario: str,
+        nuevo_rol: RolEmpleado
+    ) -> Tuple[bool, str]:
         """Cambia el rol de un empleado. Solo accesible para administradores."""
         usuario = self.repo.obtener_usuario(id_usuario)
 
@@ -554,7 +583,7 @@ class BibliotecaController:
         if existente and existente.id_usuario != id_usuario:
             return False, "Error: Ese email ya está registrado en otra cuenta."
 
-        usuario.email = nuevo_email    # El setter de Usuario ya valida el formato
+        usuario.email = nuevo_email
         self.repo.guardar_usuario(usuario)
         return True, "Email actualizado correctamente."
 
@@ -618,7 +647,6 @@ class BibliotecaController:
     def crear_material(self, material: Material) -> Tuple[bool, str]:
         """
         Añade un nuevo material al catálogo.
-        El objeto ya debe estar construido correctamente antes de llamar a esto.
         Comprueba que el código no esté ya en uso.
         """
         if self.repo.obtener_material(material.codigo_id):
@@ -641,14 +669,13 @@ class BibliotecaController:
     def eliminar_material(self, codigo_id: str) -> Tuple[bool, str]:
         """
         Elimina un material del catálogo de forma permanente.
-        Rechaza la operación si el material tiene préstamos activos para proteger la integridad.
+        Rechaza la operación si el material está en circulación.
         """
         material = self.repo.obtener_material(codigo_id)
 
         if material is None:
             return False, "Error: El material no existe en el catálogo."
 
-        # No podemos borrar algo que alguien tiene prestado ahora mismo
         if material.estado.value in ["Prestado", "Pendiente de Recogida"]:
             return False, "Error: No se puede eliminar un material que está en circulación."
 
@@ -670,6 +697,13 @@ class BibliotecaController:
     def obtener_prestamos_activos(self) -> List:
         """Devuelve todos los préstamos pendientes de devolución para el panel del auxiliar."""
         return self.repo.obtener_prestamos_activos()
+
+    def obtener_todos_los_prestamos(self) -> List:
+        """
+        Devuelve el historial completo de préstamos, incluidos los ya devueltos.
+        El auxiliar lo usa cuando activa la vista de historial en la pestaña de préstamos.
+        """
+        return self.repo.obtener_todos_los_prestamos()
 
     def obtener_reservas_de_usuario(self, id_usuario: str) -> List:
         """Devuelve el historial de reservas de un socio para la vista 'Mis reservas'."""

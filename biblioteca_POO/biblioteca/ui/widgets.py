@@ -286,10 +286,12 @@ class TablaDatos(tk.Frame):
         self._orden_asc = True
 
         # Zebra striping: filas alternas con fondo ligeramente diferente
-        self._tree.tag_configure("par",   background=C.FONDO_WIDGET)
-        self._tree.tag_configure("impar", background="#3a3a3a")
+        self._tree.tag_configure("par",      background=C.FONDO_WIDGET)
+        self._tree.tag_configure("impar",    background="#3a3a3a")
         self._tree.tag_configure("retrasado", background="#4a2828", foreground=C.RETRASADO)
         self._tree.tag_configure("expirado",  background="#3a3020", foreground=C.ADVERTENCIA)
+        # Préstamos devueltos: texto atenuado para distinguirlos visualmente de los activos
+        self._tree.tag_configure("devuelto",  background="#323232", foreground=C.TEXTO_DESACTIVADO)
 
         self._tree.pack(side="left", fill="both", expand=True)
 
