@@ -1,6 +1,3 @@
-Tienes razón, el lector de archivos me devolvió el contenido pero no te lo mostré directamente. Aquí está el código completo:
-
-```python
 """
 models.py
 
@@ -8,6 +5,7 @@ Contiene la lógica de negocio y las clases del dominio de la biblioteca.
 Este módulo es independiente de la interfaz gráfica y de la base de datos.
 """
 
+import hashlib
 from abc import ABC, abstractmethod
 from enum import Enum
 from datetime import datetime, timedelta
@@ -710,12 +708,14 @@ class Usuario(ABC):
         id_usuario: str,
         nombre: str,
         apellidos: str,
-        email: str
+        email: str,
+        password_hash: str = None   # SHA-256 en hex; None hasta que se establezca una clave
     ):
         self._id_usuario = id_usuario
         self.nombre = nombre
         self.apellidos = apellidos
         self.email = email
+        self._password_hash = password_hash
 
     @property
     def id_usuario(self) -> str:
@@ -767,6 +767,29 @@ class Usuario(ABC):
 
         self._email = nuevo_email
 
+    @property
+    def password_hash(self) -> str:
+        """Devuelve el hash almacenado; la UI nunca debe mostrar esto al usuario."""
+        return self._password_hash
+
+    def establecer_password(self, nueva_password: str):
+        """Hashea y almacena la nueva contraseña. Rechaza cadenas vacías."""
+        if not nueva_password or not isinstance(nueva_password, str):
+            raise ValueError("La contraseña no puede estar vacía.")
+
+        self._password_hash = hashlib.sha256(nueva_password.encode()).hexdigest()
+
+    def verificar_password(self, password_introducida: str) -> bool:
+        """
+        Compara la contraseña introducida con el hash guardado.
+        Devuelve False también si todavía no se ha establecido ninguna.
+        """
+        if not self._password_hash or not password_introducida:
+            return False
+
+        hash_introducido = hashlib.sha256(password_introducida.encode()).hexdigest()
+        return hash_introducido == self._password_hash
+
     @abstractmethod
     def descripcion_corta(self) -> str:
         """Genera el identificador textual para componentes visuales."""
@@ -785,12 +808,13 @@ class Socio(Usuario):
         nombre: str,
         apellidos: str,
         email: str,
+        password_hash: str = None,
         sancionado: bool = False,
         prestamos_activos: int = 0,
         max_prestamos: int = ConfiguracionBiblioteca.MAX_PRESTAMOS,
         max_especial: bool = False
     ):
-        super().__init__(id_usuario, nombre, apellidos, email)
+        super().__init__(id_usuario, nombre, apellidos, email, password_hash)
         self._sancionado = sancionado
         self._prestamos_activos = prestamos_activos
         self._max_prestamos = max_prestamos
@@ -887,9 +911,10 @@ class Empleado(Usuario):
         nombre: str,
         apellidos: str,
         email: str,
+        password_hash: str = None,
         rol: RolEmpleado = RolEmpleado.AUXILIAR
     ):
-        super().__init__(id_usuario, nombre, apellidos, email)
+        super().__init__(id_usuario, nombre, apellidos, email, password_hash)
         self._rol = rol
 
     @property
@@ -1161,4 +1186,3 @@ class Prestamo:
             f"[{self._id_prestamo}] {self._material.titulo} prestado a "
             f"{self._usuario.nombre} ({fecha_p} -> {fecha_d}) | Estado: {self._estado.value}"
         )
-```

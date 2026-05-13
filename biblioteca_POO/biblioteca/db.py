@@ -61,19 +61,26 @@ class BibliotecaRepository:
                 id_usuario TEXT PRIMARY KEY,
                 nombre TEXT NOT NULL,
                 apellidos TEXT NOT NULL,
-                email TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
                 tipo_usuario TEXT NOT NULL,
-                
+                password_hash TEXT,
+
                 -- Atributos exclusivos de Socio
                 sancionado INTEGER DEFAULT 0,
                 prestamos_activos INTEGER DEFAULT 0,
                 max_prestamos INTEGER,
                 max_especial INTEGER DEFAULT 0,
-                
+
                 -- Atributos exclusivos de Empleado
                 rol TEXT
             )
         ''')
+
+        # Migración silenciosa: añade password_hash si la BD era anterior a esta versión
+        try:
+            cursor.execute("ALTER TABLE usuarios ADD COLUMN password_hash TEXT")
+        except Exception:
+            pass    # La columna ya existe, no hay nada que hacer
         
         # TABLA MATERIALES (Actualizada para soportar Revistas)
         cursor.execute('''
@@ -153,21 +160,22 @@ class BibliotecaRepository:
         """Traduce un objeto Usuario (Socio o Empleado) y lo inserta/actualiza en SQLite."""
         conexion = self._conectar()
         cursor = conexion.cursor()
-        
+
         consulta = '''
             REPLACE INTO usuarios (
-                id_usuario, nombre, apellidos, email, tipo_usuario, 
+                id_usuario, nombre, apellidos, email, tipo_usuario, password_hash,
                 sancionado, prestamos_activos, max_prestamos, max_especial, rol
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         '''
-        
+
         if isinstance(usuario, Socio):
             valores = (
-                usuario.id_usuario, 
-                usuario.nombre, 
-                usuario.apellidos, 
-                usuario.email, 
+                usuario.id_usuario,
+                usuario.nombre,
+                usuario.apellidos,
+                usuario.email,
                 "Socio",
+                usuario.password_hash,
                 int(usuario.sancionado),
                 usuario.prestamos_activos,
                 usuario.max_prestamos,
@@ -176,17 +184,18 @@ class BibliotecaRepository:
             )
         elif isinstance(usuario, Empleado):
             valores = (
-                usuario.id_usuario, 
-                usuario.nombre, 
-                usuario.apellidos, 
-                usuario.email, 
+                usuario.id_usuario,
+                usuario.nombre,
+                usuario.apellidos,
+                usuario.email,
                 "Empleado",
+                usuario.password_hash,
                 0, 0, None, 0,
                 usuario.rol.value
             )
         else:
             raise ValueError("Tipo de usuario desconocido.")
-            
+
         cursor.execute(consulta, valores)
         conexion.commit()
         conexion.close()
@@ -309,41 +318,74 @@ class BibliotecaRepository:
         """Busca un usuario en la BD y reconstruye la instancia de Socio o Empleado."""
         conexion = self._conectar()
         cursor = conexion.cursor()
-        
+
         cursor.execute("SELECT * FROM usuarios WHERE id_usuario = ?", (id_usuario,))
         fila = cursor.fetchone()
         conexion.close()
-        
+
         if fila is None:
             return None
-            
+
+        return self._fila_a_usuario(fila)
+
+    def _fila_a_usuario(self, fila: tuple) -> Usuario:
+        """
+        Método interno que convierte una fila de la tabla usuarios en su objeto Python.
+        """
         (
-            db_id, db_nom, db_ape, db_email, db_tipo, 
+            db_id, db_nom, db_ape, db_email, db_tipo, db_hash,
             db_sancionado, db_activos, db_max_prest, db_especial, db_rol
         ) = fila
-        
+
         if db_tipo == "Socio":
             return Socio(
                 id_usuario=db_id,
                 nombre=db_nom,
                 apellidos=db_ape,
                 email=db_email,
+                password_hash=db_hash,
                 sancionado=bool(db_sancionado),
                 prestamos_activos=db_activos,
                 max_prestamos=db_max_prest if db_max_prest is not None else 3,
                 max_especial=bool(db_especial)
             )
-            
+
         elif db_tipo == "Empleado":
             return Empleado(
                 id_usuario=db_id,
                 nombre=db_nom,
                 apellidos=db_ape,
                 email=db_email,
+                password_hash=db_hash,
                 rol=RolEmpleado(db_rol)
             )
-            
+
         return None
+
+    def obtener_usuario_por_email(self, email: str) -> Usuario:
+        """Busca un usuario por su dirección de correo. Clave de acceso para el login."""
+        conexion = self._conectar()
+        cursor = conexion.cursor()
+
+        cursor.execute("SELECT * FROM usuarios WHERE email = ?", (email.strip().lower(),))
+        fila = cursor.fetchone()
+        conexion.close()
+
+        if fila is None:
+            return None
+
+        return self._fila_a_usuario(fila)
+
+    def obtener_todos_los_usuarios(self) -> list:
+        """Devuelve todos los usuarios registrados. Útil para el panel de administración."""
+        conexion = self._conectar()
+        cursor = conexion.cursor()
+
+        cursor.execute("SELECT * FROM usuarios ORDER BY tipo_usuario, apellidos")
+        filas = cursor.fetchall()
+        conexion.close()
+
+        return [self._fila_a_usuario(f) for f in filas if self._fila_a_usuario(f) is not None]
 
     def obtener_material(self, codigo_id: str) -> Material:
         """Reconstruye el objeto Material exacto basándose en la columna 'tipo_material'."""
@@ -476,6 +518,142 @@ class BibliotecaRepository:
         
         return prestamo
     
+
+    def eliminar_material(self, codigo_id: str) -> bool:
+        """
+        Borra un material del catálogo de forma permanente.
+        Solo debe llamarse desde el controlador, que verifica que no haya préstamos activos.
+        """
+        conexion = self._conectar()
+        cursor = conexion.cursor()
+
+        cursor.execute("DELETE FROM materiales WHERE codigo_id = ?", (codigo_id,))
+        eliminado = cursor.rowcount > 0
+        conexion.commit()
+        conexion.close()
+
+        return eliminado
+
+    def buscar_materiales(
+        self,
+        titulo: str = None,
+        tipo_material: str = None,
+        autor: str = None,
+        editorial: str = None,
+        isbn: str = None,
+        issn: str = None,
+        fabricante: str = None,
+        ubicacion: str = None,
+        estado: str = None,
+        solo_disponibles: bool = False
+    ) -> list:
+        """
+        Búsqueda avanzada con filtros combinables. Todos los parámetros son opcionales;
+        si no se pasa ninguno devuelve el catálogo completo ordenado por título.
+        Las comparaciones de texto usan LIKE con comodín para búsquedas parciales.
+        """
+        conexion = self._conectar()
+        cursor = conexion.cursor()
+
+        # Construimos la query dinámicamente según los filtros que lleguen
+        condiciones = []
+        parametros = []
+
+        if titulo:
+            condiciones.append("titulo LIKE ?")
+            parametros.append(f"%{titulo.strip()}%")
+
+        if tipo_material:
+            condiciones.append("tipo_material = ?")
+            parametros.append(tipo_material.strip())
+
+        if autor:
+            condiciones.append("autor LIKE ?")
+            parametros.append(f"%{autor.strip()}%")
+
+        if editorial:
+            condiciones.append("editorial LIKE ?")
+            parametros.append(f"%{editorial.strip()}%")
+
+        if isbn:
+            condiciones.append("isbn LIKE ?")
+            parametros.append(f"%{isbn.strip()}%")
+
+        if issn:
+            condiciones.append("issn LIKE ?")
+            parametros.append(f"%{issn.strip()}%")
+
+        if fabricante:
+            condiciones.append("fabricante LIKE ?")
+            parametros.append(f"%{fabricante.strip()}%")
+
+        if ubicacion:
+            condiciones.append("ubicacion LIKE ?")
+            parametros.append(f"%{ubicacion.strip()}%")
+
+        if estado:
+            condiciones.append("estado = ?")
+            parametros.append(estado.strip())
+
+        if solo_disponibles:
+            condiciones.append("estado = ?")
+            parametros.append(EstadoMaterial.DISPONIBLE.value)
+
+        where = f"WHERE {' AND '.join(condiciones)}" if condiciones else ""
+        query = f"SELECT codigo_id FROM materiales {where} ORDER BY titulo"
+
+        cursor.execute(query, parametros)
+        ids = [fila[0] for fila in cursor.fetchall()]
+        conexion.close()
+
+        # Reconstruimos los objetos completos usando obtener_material
+        return [self.obtener_material(codigo) for codigo in ids]
+
+    def obtener_prestamos_de_usuario(self, id_usuario: str) -> list:
+        """Devuelve todos los préstamos (activos e históricos) de un socio concreto."""
+        conexion = self._conectar()
+        cursor = conexion.cursor()
+
+        cursor.execute(
+            "SELECT id_prestamo FROM prestamos WHERE id_usuario = ? ORDER BY fecha_prestamo DESC",
+            (id_usuario,)
+        )
+        ids = [fila[0] for fila in cursor.fetchall()]
+        conexion.close()
+
+        return [self.obtener_prestamo(pid) for pid in ids]
+
+    def obtener_prestamos_activos(self) -> list:
+        """
+        Devuelve todos los préstamos que no se han devuelto todavía.
+        El auxiliar lo usa para gestionar las devoluciones en el mostrador.
+        """
+        conexion = self._conectar()
+        cursor = conexion.cursor()
+
+        # Buscamos tanto ACTIVO como RETRASADO (los dos estados "pendientes")
+        cursor.execute(
+            "SELECT id_prestamo FROM prestamos WHERE estado IN (?, ?) ORDER BY fecha_devolucion_prevista",
+            (EstadoPrestamo.ACTIVO.value, EstadoPrestamo.RETRASADO.value)
+        )
+        ids = [fila[0] for fila in cursor.fetchall()]
+        conexion.close()
+
+        return [self.obtener_prestamo(pid) for pid in ids]
+
+    def obtener_reservas_de_usuario(self, id_usuario: str) -> list:
+        """Devuelve todas las reservas (activas e históricas) de un socio concreto."""
+        conexion = self._conectar()
+        cursor = conexion.cursor()
+
+        cursor.execute(
+            "SELECT id_reserva FROM reservas WHERE id_usuario = ? ORDER BY fecha_reserva DESC",
+            (id_usuario,)
+        )
+        ids = [fila[0] for fila in cursor.fetchall()]
+        conexion.close()
+
+        return [self.obtener_reserva(rid) for rid in ids]
 
     # ==========================================
     # RESERVAS (Guardado y Recuperación)

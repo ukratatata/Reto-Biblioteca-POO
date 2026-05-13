@@ -8,9 +8,11 @@ Aplica las reglas de negocio asegurando que todo se actualice de forma coherente
 
 import uuid
 import threading
-from typing import Callable, List, Tuple
+from typing import Callable, List, Optional, Tuple
 
-from biblioteca.models import Usuario, Material, Prestamo, Reserva, Socio, MaterialFisico
+from biblioteca.models import (
+    Usuario, Material, Prestamo, Reserva, Socio, Empleado, MaterialFisico, RolEmpleado
+)
 from biblioteca.db import BibliotecaRepository
 
 
@@ -366,3 +368,272 @@ class BibliotecaController:
         self.repo.guardar_reserva(reserva)
         self.repo.guardar_material(material)
         self.repo.guardar_usuario(usuario)
+
+    # ==========================================
+    # 4. LOGIN Y AUTENTICACIÓN
+    # ==========================================
+
+    def login_por_email(
+        self,
+        email: str,
+        password: str
+    ) -> Tuple[bool, str, Optional[Usuario]]:
+        """
+        Intenta autenticar a un usuario por email y contraseña.
+
+        Retorna:
+            - (True, "Bienvenido...", objeto_usuario) si las credenciales son correctas.
+            - (False, "Mensaje de error", None) si el email no existe o la clave es errónea.
+        """
+        if not email or not password:
+            return False, "Error: Introduce email y contraseña.", None
+
+        usuario = self.repo.obtener_usuario_por_email(email)
+
+        if usuario is None:
+            return False, "Error: No existe ninguna cuenta con ese email.", None
+
+        if not usuario.verificar_password(password):
+            return False, "Error: Contraseña incorrecta.", None
+
+        return True, f"Bienvenido, {usuario.nombre}.", usuario
+
+    # ==========================================
+    # 5. GESTIÓN DE USUARIOS
+    # ==========================================
+
+    def crear_socio(
+        self,
+        id_usuario: str,
+        nombre: str,
+        apellidos: str,
+        email: str,
+        password: str
+    ) -> Tuple[bool, str]:
+        """
+        Registra un nuevo socio en el sistema con su contraseña inicial.
+        Comprueba que el ID y el email no estén ya en uso.
+        """
+        if self.repo.obtener_usuario(id_usuario):
+            return False, f"Error: El ID '{id_usuario}' ya está en uso."
+
+        if self.repo.obtener_usuario_por_email(email):
+            return False, f"Error: El email '{email}' ya está registrado."
+
+        nuevo_socio = Socio(
+            id_usuario=id_usuario,
+            nombre=nombre,
+            apellidos=apellidos,
+            email=email
+        )
+        nuevo_socio.establecer_password(password)
+
+        self.repo.guardar_usuario(nuevo_socio)
+        return True, f"Socio '{id_usuario}' creado correctamente."
+
+    def crear_empleado(
+        self,
+        id_usuario: str,
+        nombre: str,
+        apellidos: str,
+        email: str,
+        password: str,
+        rol: RolEmpleado = RolEmpleado.AUXILIAR
+    ) -> Tuple[bool, str]:
+        """
+        Registra un nuevo empleado. Solo debe llamarse desde el panel de administrador.
+        Comprueba que el ID y el email no estén ya en uso.
+        """
+        if self.repo.obtener_usuario(id_usuario):
+            return False, f"Error: El ID '{id_usuario}' ya está en uso."
+
+        if self.repo.obtener_usuario_por_email(email):
+            return False, f"Error: El email '{email}' ya está registrado."
+
+        nuevo_empleado = Empleado(
+            id_usuario=id_usuario,
+            nombre=nombre,
+            apellidos=apellidos,
+            email=email,
+            rol=rol
+        )
+        nuevo_empleado.establecer_password(password)
+
+        self.repo.guardar_usuario(nuevo_empleado)
+        return True, f"Empleado '{id_usuario}' ({rol.value}) creado correctamente."
+
+    def cambiar_rol_empleado(
+        self,
+        id_usuario: str,
+        nuevo_rol: RolEmpleado
+    ) -> Tuple[bool, str]:
+        """Cambia el rol de un empleado. Solo accesible para administradores."""
+        usuario = self.repo.obtener_usuario(id_usuario)
+
+        if usuario is None:
+            return False, "Error: El usuario no existe."
+
+        if not isinstance(usuario, Empleado):
+            return False, "Error: Solo se puede cambiar el rol de un empleado."
+
+        usuario.rol = nuevo_rol
+        self.repo.guardar_usuario(usuario)
+        return True, f"Rol de '{id_usuario}' actualizado a {nuevo_rol.value}."
+
+    def cambiar_sancion_socio(self, id_usuario: str) -> Tuple[bool, str]:
+        """Alterna la sanción de un socio. Accesible para bibliotecario y superior."""
+        usuario = self.repo.obtener_usuario(id_usuario)
+
+        if usuario is None:
+            return False, "Error: El usuario no existe."
+
+        if not isinstance(usuario, Socio):
+            return False, "Error: Solo se puede sancionar a un socio."
+
+        usuario.cambiar_sancionar()
+        accion = "sancionado" if usuario.sancionado else "indultado"
+        self.repo.guardar_usuario(usuario)
+        return True, f"Socio '{id_usuario}' {accion} correctamente."
+
+    def cambiar_email_usuario(
+        self,
+        id_usuario: str,
+        nuevo_email: str
+    ) -> Tuple[bool, str]:
+        """
+        Permite a cualquier usuario cambiar su propio email desde la UI.
+        Comprueba que el nuevo email no esté ya en uso por otra cuenta.
+        """
+        usuario = self.repo.obtener_usuario(id_usuario)
+
+        if usuario is None:
+            return False, "Error: El usuario no existe."
+
+        existente = self.repo.obtener_usuario_por_email(nuevo_email)
+        if existente and existente.id_usuario != id_usuario:
+            return False, "Error: Ese email ya está registrado en otra cuenta."
+
+        usuario.email = nuevo_email    # El setter de Usuario ya valida el formato
+        self.repo.guardar_usuario(usuario)
+        return True, "Email actualizado correctamente."
+
+    def cambiar_password_usuario(
+        self,
+        id_usuario: str,
+        password_actual: str,
+        nueva_password: str
+    ) -> Tuple[bool, str]:
+        """
+        Cambia la contraseña de un usuario verificando primero la actual.
+        Así no se puede cambiar la clave de otra persona aunque tengas su ID.
+        """
+        usuario = self.repo.obtener_usuario(id_usuario)
+
+        if usuario is None:
+            return False, "Error: El usuario no existe."
+
+        if not usuario.verificar_password(password_actual):
+            return False, "Error: La contraseña actual es incorrecta."
+
+        usuario.establecer_password(nueva_password)
+        self.repo.guardar_usuario(usuario)
+        return True, "Contraseña actualizada correctamente."
+
+    # ==========================================
+    # 6. GESTIÓN DE MATERIALES
+    # ==========================================
+
+    def buscar_materiales(
+        self,
+        titulo: str = None,
+        tipo_material: str = None,
+        autor: str = None,
+        editorial: str = None,
+        isbn: str = None,
+        issn: str = None,
+        fabricante: str = None,
+        ubicacion: str = None,
+        estado: str = None,
+        solo_disponibles: bool = False
+    ) -> List[Material]:
+        """
+        Búsqueda avanzada de materiales con filtros combinables.
+        Cualquier combinación de parámetros es válida; si no se pasa ninguno
+        devuelve el catálogo completo.
+        """
+        return self.repo.buscar_materiales(
+            titulo=titulo,
+            tipo_material=tipo_material,
+            autor=autor,
+            editorial=editorial,
+            isbn=isbn,
+            issn=issn,
+            fabricante=fabricante,
+            ubicacion=ubicacion,
+            estado=estado,
+            solo_disponibles=solo_disponibles
+        )
+
+    def crear_material(self, material: Material) -> Tuple[bool, str]:
+        """
+        Añade un nuevo material al catálogo.
+        El objeto ya debe estar construido correctamente antes de llamar a esto.
+        Comprueba que el código no esté ya en uso.
+        """
+        if self.repo.obtener_material(material.codigo_id):
+            return False, f"Error: El código '{material.codigo_id}' ya existe en el catálogo."
+
+        self.repo.guardar_material(material)
+        return True, f"Material '{material.codigo_id}' añadido correctamente."
+
+    def modificar_material(self, material: Material) -> Tuple[bool, str]:
+        """
+        Guarda los cambios realizados sobre un material existente.
+        La UI se encarga de construir el objeto modificado antes de llamar a esto.
+        """
+        if not self.repo.obtener_material(material.codigo_id):
+            return False, f"Error: El material '{material.codigo_id}' no existe en el catálogo."
+
+        self.repo.guardar_material(material)
+        return True, f"Material '{material.codigo_id}' actualizado correctamente."
+
+    def eliminar_material(self, codigo_id: str) -> Tuple[bool, str]:
+        """
+        Elimina un material del catálogo de forma permanente.
+        Rechaza la operación si el material tiene préstamos activos para proteger la integridad.
+        """
+        material = self.repo.obtener_material(codigo_id)
+
+        if material is None:
+            return False, "Error: El material no existe en el catálogo."
+
+        # No podemos borrar algo que alguien tiene prestado ahora mismo
+        if material.estado.value in ["Prestado", "Pendiente de Recogida"]:
+            return False, "Error: No se puede eliminar un material que está en circulación."
+
+        self.repo.eliminar_material(codigo_id)
+        return True, f"Material '{codigo_id}' eliminado del catálogo."
+
+    # ==========================================
+    # 7. LISTADOS PARA LA INTERFAZ
+    # ==========================================
+
+    def obtener_todos_los_usuarios(self) -> List[Usuario]:
+        """Devuelve el listado completo de usuarios para el panel de administración."""
+        return self.repo.obtener_todos_los_usuarios()
+
+    def obtener_prestamos_de_usuario(self, id_usuario: str) -> List:
+        """Devuelve el historial de préstamos de un socio para la vista 'Mis préstamos'."""
+        return self.repo.obtener_prestamos_de_usuario(id_usuario)
+
+    def obtener_prestamos_activos(self) -> List:
+        """Devuelve todos los préstamos pendientes de devolución para el panel del auxiliar."""
+        return self.repo.obtener_prestamos_activos()
+
+    def obtener_reservas_de_usuario(self, id_usuario: str) -> List:
+        """Devuelve el historial de reservas de un socio para la vista 'Mis reservas'."""
+        return self.repo.obtener_reservas_de_usuario(id_usuario)
+
+    def obtener_reservas_activas(self) -> List:
+        """Devuelve todas las reservas pendientes de recogida para el panel del auxiliar."""
+        return self.repo.obtener_reservas_activas()
