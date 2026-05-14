@@ -68,7 +68,7 @@ class BibliotecaController:
         if self._callback_expiracion and expiradas:
             self._callback_expiracion(expiradas)
 
-        # Nos reprogramamos para la siguiente vuelta
+        # reprogramamos para la siguiente vuelta
         self._iniciar_temporizador()
 
     def detener_temporizador(self):
@@ -144,8 +144,8 @@ class BibliotecaController:
         if isinstance(usuario, Socio):
             usuario.incrementar_prestamos()
 
-        # Generamos un ID corto y seguro mediante un bucle anti-colisiones
-        while True:
+        # Generamos un ID corto y seguro mediante un bucle que crea codigos de baja probabilidad 
+        while True: # de repeticion y ademas lo contraresta con la base de datos
             nuevo_id_prestamo = f"P-{uuid.uuid4().hex[:8].upper()}"
             if self.repo.obtener_prestamo(nuevo_id_prestamo) is None:
                 break
