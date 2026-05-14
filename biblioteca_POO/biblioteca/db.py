@@ -75,14 +75,8 @@ class BibliotecaRepository:
                 rol TEXT
             )
         ''')
-
-        # Migración silenciosa: añade password_hash si la BD era anterior a esta versión
-        try:
-            cursor.execute("ALTER TABLE usuarios ADD COLUMN password_hash TEXT")
-        except Exception:
-            pass    # La columna ya existe, no hay nada que hacer
         
-        # TABLA MATERIALES (Actualizada para soportar Revistas)
+        # TABLA MATERIALES
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS materiales (
                 codigo_id TEXT PRIMARY KEY,
