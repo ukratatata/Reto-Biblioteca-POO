@@ -118,20 +118,29 @@ El temporizador de expiración de reservas se ejecuta automáticamente cada 5 mi
 
 ```
 biblioteca_POO/
-├── main.py                  ← Punto de entrada
-├── abrir_terminal.bat       ← Abre cmd en esta carpeta
+├── main.py                     ← Punto de entrada
+├── abrir_terminal.bat          ← Abre cmd aquí
+├── README.md
+├── Bilioteca.txt
+│
+├── assets/                     ← Contraseñas y recursos
 ├── data/
-│   └── biblioteca.db        ← Base de datos (se crea sola)
-└── biblioteca/
-    ├── models.py            ← Clases del dominio (materiales, usuarios, transacciones)
-    ├── db.py                ← Acceso a datos SQLite
-    ├── controllers.py       ← Lógica de negocio y reglas del sistema
+│   └── biblioteca.db           ← Base de datos SQLite
+├── docs/                       ← Documentación y memoria del proyecto
+│
+└── biblioteca/                 ← Paquete principal
+    ├── models.py               ← Clases del dominio (materiales, usuarios, transacciones)
+    ├── db.py                   ← Acceso a datos SQLite (Repository)
+    ├── controllers.py          ← Lógica de negocio y reglas del sistema (MVC)
+    │
     └── ui/
-        ├── theme.py         ← Colores y fuentes
-        ├── widgets.py       ← Componentes reutilizables
-        ├── app_window.py    ← Orquestador principal
-        ├── login_view.py    ← Pantalla de login
-        ├── socio_view.py    ← Interfaz del socio
-        └── empleado_view.py ← Interfaz del empleado
+        ├── theme.py            ← Paleta de colores y fuentes
+        ├── widgets.py          ← Componentes reutilizables (botones, tablas, campos)
+        ├── app_window.py       ← Orquestador: ciclo login → sesión → logout
+        ├── login_view.py       ← Pantalla de acceso
+        ├── socio_view.py       ← Interfaz del socio
+        ├── empleado_view.py    ← Interfaz del empleado (pestañas según rol)
+        ├── formularios.py      ← Formularios de creación y edición
+        └── selectores.py       ← Ventanas de búsqueda y detalle de usuarios
 ```
 

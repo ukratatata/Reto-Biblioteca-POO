@@ -1,0 +1,138 @@
+biblioteca_POO/
+│
+├── main.py                      ← Punto de entrada (python main.py)
+├── abrir_terminal.bat           ← Abre cmd en esta carpeta
+├── README.md                    ← Documentación del proyecto
+├── Bilioteca.txt                ← Notas del proyecto
+│
+├── assets/
+│   └── Contraseñas secretas.txt  <- No mirar aqui, alto secreto!
+│
+├── data/
+│   └── biblioteca.db            ← Base de datos SQLite
+│
+├── docs/
+│   ├── Flujo Completo Prestamo.txt
+│   ├── Memoria_Biblioteca_POO.pdf
+│   ├── Sistema de Gestión de Biblioteca con POO.pdf
+│   └── Usuario Management Framework-2026-05-14-005713.pdf
+│
+└── biblioteca/                  ← Paquete principal de Python
+    │
+    ├── __init__.py
+    │
+    ├── models.py                ← Clases del dominio
+    │                                · Enums: EstadoMaterial, EstadoPrestamo,
+    │                                         EstadoReserva, TipoDispositivo, RolEmpleado
+    │                                · Materiales: Material (ABC) → MaterialFisico →
+    │                                              Libro, Revista, Dispositivo, JuegoDeMesa
+    │                                              Material → RecursoDigital
+    │                                · Usuarios: Usuario (ABC) → Socio, Empleado
+    │                                · Transacciones: Reserva, Prestamo
+    │                                · ConfiguracionBiblioteca
+    │
+    ├── db.py                    ← Capa de acceso a datos (Repository)
+    │                                · Tablas: usuarios, materiales,
+    │                                          prestamos, reservas
+    │                                · Generadores de ID automáticos
+    │                                  (US-, UE-, MFL-, MFR-, MFD-, MFJ-, MFG-)
+    │                                · Búsqueda avanzada con filtros combinables
+    │
+    ├── controllers.py           ← Capa de control (MVC)
+    │                                · Login y autenticación con hash SHA-256
+    │                                · Préstamos, reservas, devoluciones
+    │                                · CRUD de socios, empleados y materiales
+    │                                · Temporizador de expiración de reservas
+    │
+    └── ui/                      ← Interfaz gráfica Tkinter
+        │
+        ├── __init__.py
+        │
+        ├── theme.py             ← Paleta de colores y fuentes
+        │                            · Fondo oscuro #2e2e2e / panel #373737
+        │                            · Acento dorado #cfa959, azul #7eb9df
+        │                            · Estilos ttk globales (Treeview, Notebook...)
+        │
+        ├── widgets.py           ← Componentes reutilizables
+        │                            · Botones: Primario, Secundario, Peligro, Ghost
+        │                            · Campos: CampoTexto, CampoNumero, ComboBox
+        │                            · TablaDatos: Treeview con ordenación por columna
+        │                              y zebra-striping con tags semánticos
+        │                            · EtiquetaEstado, CabeceraPanel, Separador
+        │
+        ├── app_window.py        ← Orquestador principal
+        │                            · Ciclo: login → ventana → logout → login
+        │                            · Controlador creado en _mostrar_login,
+        │                              no en el logout (evita timers acumulados)
+        │
+        ├── login_view.py        ← Pantalla de acceso
+        │                            · Email + contraseña
+        │                            · Detecta si es Socio o Empleado
+        │
+        ├── socio_view.py        ← Ventana principal del socio
+        │                            · Catálogo: 5 filtros combinables en tiempo real
+        │                            · Mis Préstamos: historial con colores por estado
+        │                            · Mi Cuenta: cambiar email y contraseña
+        │
+        ├── empleado_view.py     ← Ventana principal del empleado
+        │                            · Auxiliar+: Reservas pendientes (buscador por
+        │                              socio/material, formalizar, cancelar)
+        │                              Préstamos activos (toggle historial devueltos)
+        │                            · Bibliotecario+: Catálogo CRUD completo,
+        │                              Socios (buscar, detalle, sancionar, eliminar)
+        │                            · Admin: Empleados (crear, editar, cambiar rol)
+        │                            · Mi Cuenta: cambiar email y contraseña
+        │
+        ├── formularios.py       ← Formularios modales de creación/edición
+        │                            · FormularioMaterial: todos los tipos,
+        │                              ID automático, campos * obligatorios
+        │                            · FormularioSocio: crear y editar
+        │                            · FormularioEmpleado: crear nuevo empleado
+        │
+        └── selectores.py        ← Ventanas auxiliares de selección y detalle
+                                     · SelectorSocio: búsqueda en tiempo real
+                                     · SelectorMaterial: solo disponibles
+                                     · VentanaDetalleSocio: historial de préstamos
+                                       y reservas, prestar directo, resetear contraseña
+                                     · VentanaDetalleEmpleado: editar nombre/email/rol,
+                                       resetear contraseña (solo admin)
+                                     · DialogoSeleccion: selector de opciones con radio
+
+
+
+
+
+
+
+
+Ejemplo del Flujo Completo: "Hacer un Préstamo":
+Un Empleado va a prestarle un libro a un Socio:
+
+UI: En empleado_view.py, el empleado rellena el ID del socio y el ID del material y hace clic en "Prestar".
+
+UI → Controlador: La vista llama a self._ctrl.realizar_prestamo(id_socio, id_material).
+
+Controlador → Base de Datos: El controlador pide a db.py: "Búscame a este Socio y a este Material".
+
+Base de Datos: Hace un SELECT en SQLite, instancia el objeto Socio y el objeto Libro, y se los devuelve al controlador.
+
+Controlador → Modelos: El controlador usa el modelo: socio.puede_prestar(). Si es falso, aborta y devuelve un mensaje de error a la UI.
+
+Controlador → Base de Datos: Si todo es correcto, el controlador crea un objeto Prestamo nuevo y le dice a db.py: "Guarda todos estos cambios en SQLite".
+
+Controlador → UI: Devuelve un True y un texto de "Éxito".
+
+UI: Muestra la etiqueta verde en pantalla y refresca la tabla visual de préstamos.
+
+
+ESTANDARES SEGUIDOS: 
+
+MVC (Model view controller)
+Single Table Inheritance (Herencia de Tabla Única).
+Patrón Repositorio (Repository Pattern) o DAO (Data Access Object)
+CLEAN CODE
+CQS (Command-query separation)
+UUIDs (Universally Unique Identifiers) 
+
+
+    
