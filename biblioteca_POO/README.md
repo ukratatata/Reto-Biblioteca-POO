@@ -1,3 +1,6 @@
+PARA JOSELU: La memoria, presentación y diagrama de clases y carpetas esta en la carpeta docs
+
+
 # 📚 Sistema de Gestión de Biblioteca
 
 Aplicación de escritorio para la gestión integral de una biblioteca: socios, empleados, catálogo de materiales, préstamos y reservas. Desarrollada en Python con interfaz gráfica Tkinter y base de datos SQLite.
