@@ -11,7 +11,8 @@ import threading
 from typing import Callable, List, Optional, Tuple
 
 from biblioteca.models import (
-    Usuario, Material, Prestamo, Reserva, Socio, Empleado, MaterialFisico, RolEmpleado
+    Usuario, Material, Prestamo, Reserva, Socio, Empleado, MaterialFisico,
+    RolEmpleado, EstadoMaterial, ConfiguracionBiblioteca
 )
 from biblioteca.db import BibliotecaRepository
 
@@ -249,7 +250,8 @@ class BibliotecaController:
         self.repo.guardar_usuario(usuario)
         self.repo.guardar_reserva(nueva_reserva)
 
-        return True, f"¡Éxito! Reserva '{nuevo_id_reserva}' creada. El socio tiene 48h para recoger."
+        horas = ConfiguracionBiblioteca.HORAS_LIMITE_RECOGIDA
+        return True, f"¡Éxito! Reserva '{nuevo_id_reserva}' creada. El socio tiene {horas}h para recoger."
 
     def procesar_recogida(
         self,
@@ -365,23 +367,6 @@ class BibliotecaController:
     # 5. GESTIÓN DE USUARIOS
     # ==========================================
 
-    def siguiente_id_material(self, tipo_material: str) -> str:
-        """
-        Devuelve el siguiente ID libre para el tipo de material indicado.
-        tipo_material: 'Libro' | 'Revista' | 'Dispositivo' | 'JuegoDeMesa' | 'RecursoDigital'
-        """
-        mapa = {
-            "Libro":          self.repo.siguiente_id_libro,
-            "Revista":        self.repo.siguiente_id_revista,
-            "Dispositivo":    self.repo.siguiente_id_dispositivo,
-            "JuegoDeMesa":    self.repo.siguiente_id_juego,
-            "RecursoDigital": self.repo.siguiente_id_digital,
-        }
-        generador = mapa.get(tipo_material)
-        if not generador:
-            raise ValueError(f"Tipo de material desconocido: {tipo_material}")
-        return generador()
-
     def crear_socio(
         self,
         nombre: str,
@@ -454,7 +439,7 @@ class BibliotecaController:
         email: str
     ) -> Tuple[bool, str]:
         """Actualiza los datos básicos de un socio existente."""
-        usuario = self.repo.obtener_usuario(id_usuario)
+        usuario = self.buscar_usuario(id_usuario)
         if usuario is None or not isinstance(usuario, Socio):
             return False, "Error: Socio no encontrado."
 
@@ -473,7 +458,7 @@ class BibliotecaController:
         Elimina un socio del sistema de forma permanente.
         Rechaza la operación si el socio tiene préstamos activos.
         """
-        usuario = self.repo.obtener_usuario(id_usuario)
+        usuario = self.buscar_usuario(id_usuario)
         if usuario is None or not isinstance(usuario, Socio):
             return False, "Error: Socio no encontrado."
 
@@ -496,7 +481,7 @@ class BibliotecaController:
         Solo accesible para administradores; no requiere contraseña actual.
         Comprueba que el nuevo email no esté ya en uso por otra cuenta.
         """
-        usuario = self.repo.obtener_usuario(id_objetivo)
+        usuario = self.buscar_usuario(id_objetivo)
         if usuario is None or not isinstance(usuario, Empleado):
             return False, "Error: Empleado no encontrado."
 
@@ -521,7 +506,7 @@ class BibliotecaController:
         sin necesitar conocer la contraseña actual.
         La verificación de que quien llama es admin se hace en la UI.
         """
-        usuario = self.repo.obtener_usuario(id_objetivo)
+        usuario = self.buscar_usuario(id_objetivo)
         if usuario is None:
             return False, "Error: El usuario no existe."
 
@@ -538,7 +523,7 @@ class BibliotecaController:
         nuevo_rol: RolEmpleado
     ) -> Tuple[bool, str]:
         """Cambia el rol de un empleado. Solo accesible para administradores."""
-        usuario = self.repo.obtener_usuario(id_usuario)
+        usuario = self.buscar_usuario(id_usuario)
 
         if usuario is None:
             return False, "Error: El usuario no existe."
@@ -552,7 +537,7 @@ class BibliotecaController:
 
     def cambiar_sancion_socio(self, id_usuario: str) -> Tuple[bool, str]:
         """Alterna la sanción de un socio. Accesible para bibliotecario y superior."""
-        usuario = self.repo.obtener_usuario(id_usuario)
+        usuario = self.buscar_usuario(id_usuario)
 
         if usuario is None:
             return False, "Error: El usuario no existe."
@@ -574,7 +559,7 @@ class BibliotecaController:
         Permite a cualquier usuario cambiar su propio email desde la UI.
         Comprueba que el nuevo email no esté ya en uso por otra cuenta.
         """
-        usuario = self.repo.obtener_usuario(id_usuario)
+        usuario = self.buscar_usuario(id_usuario)
 
         if usuario is None:
             return False, "Error: El usuario no existe."
@@ -597,7 +582,7 @@ class BibliotecaController:
         Cambia la contraseña de un usuario verificando primero la actual.
         Así no se puede cambiar la clave de otra persona aunque tengas su ID.
         """
-        usuario = self.repo.obtener_usuario(id_usuario)
+        usuario = self.buscar_usuario(id_usuario)
 
         if usuario is None:
             return False, "Error: El usuario no existe."
@@ -612,6 +597,23 @@ class BibliotecaController:
     # ==========================================
     # 6. GESTIÓN DE MATERIALES
     # ==========================================
+
+    def siguiente_id_material(self, tipo_material: str) -> str:
+        """
+        Devuelve el siguiente ID libre para el tipo de material indicado.
+        tipo_material: 'Libro' | 'Revista' | 'Dispositivo' | 'JuegoDeMesa' | 'RecursoDigital'
+        """
+        mapa = {
+            "Libro":          self.repo.siguiente_id_libro,
+            "Revista":        self.repo.siguiente_id_revista,
+            "Dispositivo":    self.repo.siguiente_id_dispositivo,
+            "JuegoDeMesa":    self.repo.siguiente_id_juego,
+            "RecursoDigital": self.repo.siguiente_id_digital,
+        }
+        generador = mapa.get(tipo_material)
+        if not generador:
+            raise ValueError(f"Tipo de material desconocido: {tipo_material}")
+        return generador()
 
     def buscar_materiales(
         self,
@@ -676,7 +678,7 @@ class BibliotecaController:
         if material is None:
             return False, "Error: El material no existe en el catálogo."
 
-        if material.estado.value in ["Prestado", "Pendiente de Recogida"]:
+        if material.estado in (EstadoMaterial.PRESTADO, EstadoMaterial.PENDIENTE_RECOGIDA):
             return False, "Error: No se puede eliminar un material que está en circulación."
 
         self.repo.eliminar_material(codigo_id)

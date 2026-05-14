@@ -36,9 +36,9 @@ El login se realiza con **email + contraseña**. La pantalla de inicio detecta a
 
 | Tipo                          | Email de ejemplo        | Contraseña  |
 |-------------------------------|-------------------------|-------------|
-| Socio                         | `socio1@biblioteca.com` | `1234`      |
-| Empleado (Auxiliar)           | `staff2@biblioteca.com` | `1234`      |
-| Empleado (Bibliotecario)      | `staff1@biblioteca.com` | `1234`      |
+| Socio                         | `socio1@biblioteca.com` | `123456`    |
+| Empleado (Auxiliar)           | `staff1@biblioteca.com` | `1234`      |
+| Empleado (Bibliotecario)      | `staff2@biblioteca.com` | `1234`      |
 | Empleado (Admin)              | `staff3@biblioteca.com` | `1234`      |
 
 ---

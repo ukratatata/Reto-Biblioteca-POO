@@ -292,6 +292,23 @@ class VentanaDetalleSocio(tk.Toplevel):
         self._tabla_reservas = TablaDatos(contenido, cols_r, altura_filas=5)
         self._tabla_reservas.pack(fill="x", pady=(0, 14))
 
+        # --- Resetear contraseña (privilegio de admin) ---
+        Separador(contenido).pack(fill="x", pady=(0, 14))
+
+        tk.Label(
+            contenido, text="Resetear contraseña",
+            font=F.TITULO_PEQUEÑO, bg=C.FONDO_PRINCIPAL, fg=C.TEXTO_PRINCIPAL
+        ).pack(anchor="w", pady=(0, 8))
+
+        self._f_nueva_pass  = CampoTexto(contenido, "Nueva contraseña *",   password=True)
+        self._f_nueva_pass.pack(fill="x", pady=(0, 8))
+        self._f_repite_pass = CampoTexto(contenido, "Repetir contraseña *", password=True)
+        self._f_repite_pass.pack(fill="x", pady=(0, 8))
+
+        self._estado_pass_socio = EtiquetaEstado(contenido)
+        self._estado_pass_socio.pack(anchor="w", pady=(0, 6))
+        BotonPeligro(contenido, "🔑 Resetear contraseña", self._resetear_password_socio).pack(anchor="w", pady=(0, 16))
+
         # Botones de cierre
         pie = tk.Frame(contenido, bg=C.FONDO_PRINCIPAL)
         pie.pack(fill="x")
@@ -345,9 +362,39 @@ class VentanaDetalleSocio(tk.Toplevel):
         else:
             self._estado_prestamo.error(msg)
 
+    def _resetear_password_socio(self):
+        """Resetea la contraseña del socio sin pedir la actual — privilegio de admin."""
+        nueva  = self._f_nueva_pass.get()
+        repite = self._f_repite_pass.get()
+
+        if not nueva or not repite:
+            self._estado_pass_socio.error("Introduce y repite la nueva contraseña.")
+            return
+
+        if nueva != repite:
+            self._estado_pass_socio.error("Las contraseñas no coinciden.")
+            return
+
+        if not confirmar(
+            "Resetear contraseña",
+            f"¿Resetear la contraseña de {self._socio.nombre} {self._socio.apellidos}?\n\n"
+            f"El socio no podrá recuperar su contraseña anterior."
+        ):
+            return
+
+        exito, msg = self._ctrl.resetear_password_admin(self._socio.id_usuario, nueva)
+        if exito:
+            self._f_nueva_pass.limpiar()
+            self._f_repite_pass.limpiar()
+            self._estado_pass_socio.exito(msg)
+        else:
+            self._estado_pass_socio.error(msg)
+
     def _centrar(self):
+        """Altura dinámica con tope de pantalla para que el contenido no quede cortado."""
         self.update_idletasks()
-        ancho, alto = 760, 680
+        ancho = 760
+        alto  = min(self.winfo_reqheight() + 20, self.winfo_screenheight() - 80)
         x = (self.winfo_screenwidth()  - ancho) // 2
         y = (self.winfo_screenheight() - alto)  // 2
         self.geometry(f"{ancho}x{alto}+{x}+{y}")
@@ -425,8 +472,8 @@ class VentanaDetalleEmpleado(tk.Toplevel):
         self._f_rol.pack(fill="x", pady=(0, 8))
 
         self._estado_datos = EtiquetaEstado(contenido)
-        BotonSecundario(contenido, "💾 Guardar cambios", self._guardar_datos).pack(anchor="w", pady=(4, 0))
-        self._estado_datos.pack(anchor="w", pady=(4, 20))
+        self._estado_datos.pack(anchor="w", pady=(0, 6))
+        BotonSecundario(contenido, "💾 Guardar cambios", self._guardar_datos).pack(anchor="w", pady=(0, 20))
 
         Separador(contenido).pack(fill="x", pady=(0, 20))
 
@@ -442,8 +489,8 @@ class VentanaDetalleEmpleado(tk.Toplevel):
         self._f_repite_pass.pack(fill="x", pady=(0, 8))
 
         self._estado_pass = EtiquetaEstado(contenido)
-        BotonPeligro(contenido, "🔑 Resetear contraseña", self._resetear_password).pack(anchor="w", pady=(4, 0))
-        self._estado_pass.pack(anchor="w", pady=(4, 0))
+        self._estado_pass.pack(anchor="w", pady=(0, 6))
+        BotonPeligro(contenido, "🔑 Resetear contraseña", self._resetear_password).pack(anchor="w", pady=(0, 0))
 
         Separador(contenido).pack(fill="x", pady=(20, 0))
 
@@ -509,8 +556,10 @@ class VentanaDetalleEmpleado(tk.Toplevel):
             self._estado_pass.error(msg)
 
     def _centrar(self):
+        """Altura dinámica para que el contenido nunca quede cortado."""
         self.update_idletasks()
-        ancho, alto = 520, 620
+        ancho = 520
+        alto  = self.winfo_reqheight() + 20
         x = (self.winfo_screenwidth()  - ancho) // 2
         y = (self.winfo_screenheight() - alto)  // 2
         self.geometry(f"{ancho}x{alto}+{x}+{y}")

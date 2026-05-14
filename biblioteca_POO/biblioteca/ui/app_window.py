@@ -37,21 +37,28 @@ class Aplicacion:
         # Aplicamos el tema oscuro antes de crear ningún widget
         aplicar_tema(self._root)
 
-        # Inicializamos el backend
+        # Inicializamos el repositorio — el controlador se crea al autenticarse
+        # para no arrancar el temporizador antes de que haya una sesión activa
         self._repo = BibliotecaRepository(ruta_db="data/biblioteca.db")
-        self._ctrl = BibliotecaController(self._repo)
+        self._ctrl = None
 
         # Arrancamos con la pantalla de login
         self._mostrar_login()
 
     def _mostrar_login(self):
-        """Abre la ventana de login y espera a que el usuario se autentique."""
+        """
+        Crea un controlador limpio (con su timer) y abre la ventana de login.
+        Crear el controlador aquí garantiza que el login ya tiene uno válido,
+        y que entre sesiones el timer anterior ya estaba detenido.
+        """
+        self._crear_controlador()
         VentanaLogin(self._root, self._ctrl, self._al_autenticarse)
 
     def _al_autenticarse(self, usuario):
         """
         Callback llamado por VentanaLogin cuando el login es correcto.
         Decide qué ventana principal abrir según el tipo de usuario.
+        El controlador ya está creado desde _mostrar_login.
         """
         if isinstance(usuario, Socio):
             VentanaSocio(
@@ -74,14 +81,22 @@ class Aplicacion:
     def _al_hacer_logout(self):
         """
         Callback llamado cuando el usuario cierra sesión.
-        Detiene el temporizador del controlador actual antes de reemplazarlo,
-        y vuelve al login con un controlador limpio.
+        Detiene el temporizador del controlador actual y vuelve al login.
+        El nuevo controlador (con su timer) se crea solo cuando el usuario
+        vuelva a autenticarse, para no tener hilos corriendo entre sesiones.
         """
-        # Paramos el temporizador del controlador que acaba de cerrar sesión
-        # antes de crear uno nuevo, para no acumular hilos daemon sueltos
+        # La ventana ya llamó a detener_temporizador() antes de invocar este
+        # callback, así que aquí solo lo llamamos por si acaso (es idempotente)
         self._ctrl.detener_temporizador()
-        self._ctrl = BibliotecaController(self._repo)
         self._mostrar_login()
+
+    def _crear_controlador(self):
+        """
+        Crea un controlador nuevo con su temporizador arrancado.
+        Se llama justo antes de abrir la ventana principal, no en el logout,
+        para evitar tener timers activos entre sesiones.
+        """
+        self._ctrl = BibliotecaController(self._repo)
 
     def ejecutar(self):
         """Arranca el bucle principal de eventos de Tkinter."""
